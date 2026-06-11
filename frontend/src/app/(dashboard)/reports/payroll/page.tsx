@@ -1,0 +1,187 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { reports } from '@/lib/api';
+import ReportShell from '@/components/reports/ReportShell';
+import KpiCard from '@/components/reports/KpiCard';
+import ReportTable from '@/components/reports/ReportTable';
+import { ShieldCheck, Coins, Users, CreditCard, Gift } from 'lucide-react';
+
+export default function PayrollSummaryReport() {
+  const getInitialDates = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    let fyStartYear = year;
+    if (now.getMonth() < 3) {
+      fyStartYear = year - 1;
+    }
+    return {
+      from: `${fyStartYear}-04-01`,
+      to: `${fyStartYear + 1}-03-31`,
+    };
+  };
+
+  const [dates, setDates] = useState(getInitialDates());
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['reports', 'payroll', dates.from, dates.to],
+    queryFn: async () => {
+      const res = await reports.getPayroll({ from: dates.from, to: dates.to });
+      return res.data;
+    },
+  });
+
+  const handleExport = () => {
+    if (typeof window !== 'undefined') {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const token = localStorage.getItem('auth_token');
+      const url = `${apiUrl}/reports/payroll?export=csv&from=${dates.from}&to=${dates.to}&token=${token}`;
+      window.open(url, '_blank');
+    }
+  };
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(val);
+  };
+
+  const getMonthName = (monthNum: number) => {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNum - 1] || String(monthNum);
+  };
+
+  const runColumns = [
+    { key: 'run_number', label: 'Run Number' },
+    {
+      key: 'period',
+      label: 'Pay Period',
+      render: (_: any, row: any) => `${getMonthName(row.month)} ${row.year}`,
+    },
+    { key: 'employee_count', label: 'Employees', align: 'center' as const },
+    {
+      key: 'status',
+      label: 'Status',
+      align: 'center' as const,
+      render: (val: any) => {
+        const classes = val === 'paid'
+          ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/50'
+          : 'bg-amber-950/40 text-amber-400 border-amber-900/50';
+        return (
+          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${classes}`}>
+            {String(val).toUpperCase()}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'total_gross',
+      label: 'Gross Cost',
+      align: 'right' as const,
+      render: (val: any) => <span className="font-mono text-slate-400">{formatCurrency(Number(val))}</span>,
+    },
+    {
+      key: 'total_net',
+      label: 'Net Disbursed',
+      align: 'right' as const,
+      render: (val: any) => <span className="font-mono font-bold text-emerald-400">{formatCurrency(Number(val))}</span>,
+    },
+  ];
+
+  const earnerColumns = [
+    { key: 'user_name', label: 'Employee Name' },
+    {
+      key: 'base_salary',
+      label: 'Base Pay',
+      align: 'right' as const,
+      render: (val: any) => <span className="font-mono text-slate-400">{formatCurrency(Number(val))}</span>,
+    },
+    {
+      key: 'bonus_amount',
+      label: 'Bonus',
+      align: 'right' as const,
+      render: (val: any) => (
+        <span className="font-mono text-emerald-450 font-medium">
+          {Number(val) > 0 ? `+${formatCurrency(Number(val))}` : '-'}
+        </span>
+      ),
+    },
+    {
+      key: 'net_salary',
+      label: 'Total Net Payout',
+      align: 'right' as const,
+      render: (val: any) => <span className="font-mono text-emerald-400 font-semibold">{formatCurrency(Number(val))}</span>,
+    },
+  ];
+
+  return (
+    <ReportShell
+      title="Payroll Summary Report"
+      description="View company payroll summaries, gross disbursements, net payout history, and bonuses/deductions."
+      from={dates.from}
+      to={dates.to}
+      onDateChange={(from, to) => setDates({ from, to })}
+      onExport={handleExport}
+      isLoading={isLoading}
+      error={error ? (error as any).message : null}
+    >
+      {data && (
+        <div className="space-y-6">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+            <KpiCard
+              title="Payroll Runs"
+              value={data.summary.run_count}
+              subtext="Completed Payrolls"
+              icon={<ShieldCheck className="w-5 h-5 text-sky-450" />}
+            />
+            <KpiCard
+              title="Total Gross Outlay"
+              value={formatCurrency(data.summary.total_gross)}
+              subtext="Company-side Cost"
+              icon={<Coins className="w-5 h-5" />}
+            />
+            <KpiCard
+              title="Net Disbursed"
+              value={formatCurrency(data.summary.total_net)}
+              subtext="Total Employee Take-home"
+              icon={<CreditCard className="w-5 h-5 text-emerald-400" />}
+            />
+            <KpiCard
+              title="Deductions"
+              value={formatCurrency(data.summary.total_deductions)}
+              subtext="Taxes & Benefits"
+              icon={<Users className="w-5 h-5 text-rose-400" />}
+            />
+            <KpiCard
+              title="Bonuses Paid"
+              value={formatCurrency(data.summary.total_bonuses)}
+              subtext="Performance Incentives"
+              icon={<Gift className="w-5 h-5 text-violet-400" />}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* Left Column: Monthly Run History */}
+            <div className="lg:col-span-3 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Payroll Run Logs</h3>
+              <ReportTable columns={runColumns} data={data.by_month} />
+            </div>
+
+            {/* Right Column: Top Earners */}
+            <div className="lg:col-span-2 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Top Compensation Earners</h3>
+              <ReportTable columns={earnerColumns} data={data.top_earners} />
+            </div>
+          </div>
+        </div>
+      )}
+    </ReportShell>
+  );
+}
