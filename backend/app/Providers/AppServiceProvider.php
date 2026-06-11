@@ -1,0 +1,140 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Providers;
+
+use App\Models\Department;
+use App\Models\Lead;
+use App\Models\Quote;
+use App\Models\User;
+use App\Observers\AuditObserver;
+use App\Observers\LeadObserver;
+use App\Observers\QuoteObserver;
+use App\Policies\DepartmentPolicy;
+use App\Policies\LeadPolicy;
+use App\Policies\QuotePolicy;
+use App\Policies\UserPolicy;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\ServiceProvider;
+use Spatie\Permission\Models\Role;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * All of the container bindings that should be registered.
+     */
+    public array $bindings = [];
+
+    /**
+     * All of the container singletons that should be registered.
+     */
+    public array $singletons = [];
+
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        // Register policies explicitly in case auto-discovery is off
+        Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(Department::class, DepartmentPolicy::class);
+        Gate::policy(Lead::class, LeadPolicy::class);
+        Gate::policy(Quote::class, QuotePolicy::class);
+        Gate::policy(\App\Models\Invoice::class, \App\Policies\InvoicePolicy::class);
+        Gate::policy(\App\Models\Payment::class, \App\Policies\PaymentPolicy::class);
+        Gate::policy(\App\Models\RecurringBillingRule::class, \App\Policies\RecurringBillingRulePolicy::class);
+        Gate::policy(\App\Models\Project::class, \App\Policies\ProjectPolicy::class);
+        Gate::policy(\App\Models\Task::class, \App\Policies\TaskPolicy::class);
+        Gate::policy(\App\Models\Timesheet::class, \App\Policies\TimesheetPolicy::class);
+        Gate::policy(\App\Models\PayrollRun::class, \App\Policies\PayrollPolicy::class);
+        Gate::policy(\App\Models\Expense::class, \App\Policies\ExpensePolicy::class);
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        // ─── Observers ───────────────────────────────────────────────────────
+        User::observe(AuditObserver::class);
+        Department::observe(AuditObserver::class);
+        Lead::observe(LeadObserver::class);
+        Lead::observe(AuditObserver::class);
+        Quote::observe(QuoteObserver::class);
+        Quote::observe(AuditObserver::class);
+        \App\Models\Invoice::observe(AuditObserver::class);
+        \App\Models\Payment::observe(AuditObserver::class);
+        \App\Models\RecurringBillingRule::observe(AuditObserver::class);
+        \App\Models\Project::observe(AuditObserver::class);
+        \App\Models\Milestone::observe(AuditObserver::class);
+        \App\Models\Task::observe(\App\Observers\TaskObserver::class);
+        \App\Models\Task::observe(AuditObserver::class);
+        \App\Models\Timesheet::observe(\App\Observers\TimesheetObserver::class);
+        \App\Models\Timesheet::observe(AuditObserver::class);
+        \App\Models\PayrollRun::observe(AuditObserver::class);
+        \App\Models\Expense::observe(AuditObserver::class);
+
+        // ─── Gates ───────────────────────────────────────────────────────────
+
+        /**
+         * Founders can access the recovery bin.
+         * Also usable as: Gate::authorize('access-recovery-bin')
+         */
+        Gate::define('access-recovery-bin', function (User $user): bool {
+            return $user->hasRole('founder');
+        });
+
+        /**
+         * Founders can restore deleted records.
+         */
+        Gate::define('restore-deleted', function (User $user): bool {
+            return $user->hasRole('founder');
+        });
+
+        /**
+         * Dynamic permission gate: any permission string can be checked
+         * as a gate ability if it doesn't have a dedicated policy.
+         * e.g. Gate::allows('audit-logs.view')
+         */
+        Gate::before(function (User $user, string $ability): ?bool {
+            // Founders pass every gate check
+            if ($user->hasRole('founder')) {
+                return true;
+            }
+
+            return null;
+        });
+
+        // ─── Rate Limiters ────────────────────────────────────────────────────
+
+        /**
+         * Login endpoint: 5 attempts per minute per IP.
+         */
+        RateLimiter::for('login', function (Request $request): Limit {
+            return Limit::perMinute(5)
+                ->by($request->ip())
+                ->response(function () {
+                    return response()->json([
+                        'message' => 'Too many login attempts. Please wait before trying again.',
+                    ], 429);
+                });
+        });
+
+        /**
+         * General API: 60 requests per minute per authenticated user or IP.
+         */
+        RateLimiter::for('api', function (Request $request): Limit {
+            return Limit::perMinute(60)
+                ->by($request->user()?->id ?: $request->ip())
+                ->response(function () {
+                    return response()->json([
+                        'message' => 'Too many requests. Please slow down.',
+                    ], 429);
+                });
+        });
+    }
+}
