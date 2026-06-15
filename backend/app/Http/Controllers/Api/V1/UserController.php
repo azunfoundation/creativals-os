@@ -10,6 +10,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\WelcomeUserMail;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
 
@@ -37,7 +39,7 @@ class UserController extends Controller
             ->orderBy('name')
             ->paginate($request->per_page ?? 25);
 
-        return response()->json($users);
+        return UserResource::collection($users)->response();
     }
 
     public function store(Request $request): JsonResponse
@@ -57,15 +59,17 @@ class UserController extends Controller
             'department_ids.*'       => ['exists:departments,id'],
             'manager_ids'            => ['nullable', 'array'],
             'manager_ids.*'          => ['exists:users,id'],
+            'is_client_portal_user'  => ['nullable', 'boolean'],
         ]);
 
         $user = User::create([
-            'name'        => $validated['name'],
-            'email'       => $validated['email'],
-            'password'    => Hash::make($validated['password']),
-            'phone'       => $validated['phone'] ?? null,
-            'employee_id' => $validated['employee_id'] ?? null,
-            'status'      => $validated['status'] ?? 'active',
+            'name'                  => $validated['name'],
+            'email'                 => $validated['email'],
+            'password'              => Hash::make($validated['password']),
+            'phone'                 => $validated['phone'] ?? null,
+            'employee_id'           => $validated['employee_id'] ?? null,
+            'status'                => $validated['status'] ?? 'active',
+            'is_client_portal_user' => $validated['is_client_portal_user'] ?? false,
         ]);
 
         if (! empty($validated['role_ids'])) {
@@ -87,6 +91,12 @@ class UserController extends Controller
                     'is_primary'        => true,
                 ]);
             }
+        }
+
+        try {
+            Mail::to($user->email)->send(new WelcomeUserMail($user, $validated['password']));
+        } catch (\Throwable $e) {
+            // Ignore dynamic mail connection failures so the user creation is still successful
         }
 
         return response()->json([
@@ -111,11 +121,13 @@ class UserController extends Controller
         $this->authorize('update', $user);
 
         $validated = $request->validate([
-            'name'        => ['sometimes', 'string', 'max:255'],
-            'phone'       => ['nullable', 'string', 'max:20'],
-            'employee_id' => ['nullable', 'string', Rule::unique('users', 'employee_id')->ignore($user->id)],
-            'status'      => ['nullable', Rule::in(['active', 'inactive', 'suspended'])],
-            'avatar_url'  => ['nullable', 'url'],
+            'name'                  => ['sometimes', 'string', 'max:255'],
+            'email'                 => ['sometimes', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'phone'                 => ['nullable', 'string', 'max:20'],
+            'employee_id'           => ['nullable', 'string', Rule::unique('users', 'employee_id')->ignore($user->id)],
+            'status'                => ['nullable', Rule::in(['active', 'inactive', 'suspended'])],
+            'avatar_url'            => ['nullable', 'string', 'max:2048'],
+            'is_client_portal_user' => ['nullable', 'boolean'],
         ]);
 
         $user->update($validated);
@@ -136,6 +148,32 @@ class UserController extends Controller
             'data'    => new UserResource($user->load(['roles', 'departments'])),
             'message' => 'User updated successfully.',
         ]);
+    }
+
+    /**
+     * Admin resets another user's password.
+     * POST /api/v1/users/{user}/reset-password
+     */
+    public function resetPassword(Request $request, User $user): JsonResponse
+    {
+        $this->authorize('update', $user);
+
+        // Only founder/director/hr can reset passwords
+        if (!$request->user()->hasAnyRole(['founder', 'director', 'hr'])) {
+            return response()->json(['message' => 'You are not authorized to reset passwords.'], 403);
+        }
+
+        $validated = $request->validate([
+            'password'              => ['required', 'string', 'min:8', 'confirmed'],
+            'password_confirmation' => ['required', 'string'],
+        ]);
+
+        $user->update([
+            'password'              => Hash::make($validated['password']),
+            'must_change_password'  => true,  // Force change on next login
+        ]);
+
+        return response()->json(['message' => 'Password reset successfully. User will be prompted to change it on next login.']);
     }
 
     public function destroy(User $user): JsonResponse

@@ -29,30 +29,45 @@ export default function ReportShell({
   children,
 }: ReportShellProps) {
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-slate-100">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%' }}>
       {/* Back button & Title bar */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="space-y-1">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
           <Link
             href="/reports"
-            className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-300 text-xs font-semibold uppercase tracking-wider mb-2 cursor-pointer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              color: 'var(--text-secondary)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: '0.5rem',
+              textDecoration: 'none',
+              cursor: 'pointer'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Report Hub
+            <ArrowLeft size={14} /> Back to Report Hub
           </Link>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white">{title}</h1>
-          {description && <p className="text-slate-400 text-sm">{description}</p>}
+          <h1 className="text-2xl font-bold">{title}</h1>
+          {description && <p className="text-secondary text-sm">{description}</p>}
         </div>
 
         {/* Date Filter & Export Actions */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <DateRangePicker from={from} to={to} onChange={onDateChange} />
           
           {onExport && (
             <button
               onClick={onExport}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white px-3.5 py-2 rounded-lg text-sm font-semibold shadow-sm transition cursor-pointer"
+              className="btn btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', height: '38px' }}
             >
-              <Download className="w-4 h-4 text-emerald-500" /> Export CSV
+              <Download size={16} className="text-success" /> Export CSV
             </button>
           )}
         </div>
@@ -60,18 +75,18 @@ export default function ReportShell({
 
       {/* Main Content Area */}
       {isLoading ? (
-        <div className="min-h-[400px] flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-          <p className="text-slate-500 text-sm">Aggregating report metrics...</p>
+        <div style={{ minHeight: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+          <Loader2 size={32} className="text-accent animate-spin" />
+          <p className="text-secondary text-sm" style={{ textAlign: 'center' }}>Aggregating report metrics...</p>
         </div>
       ) : error ? (
-        <div className="min-h-[300px] bg-rose-950/20 border border-rose-900/35 rounded-xl p-6 flex flex-col items-center justify-center text-center gap-3">
-          <AlertCircle className="w-10 h-10 text-rose-500" />
-          <h3 className="text-slate-200 font-bold">Failed to load report</h3>
-          <p className="text-slate-500 text-sm max-w-md">{error}</p>
+        <div className="card" style={{ minHeight: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '1rem', border: '1px solid var(--danger-subtle)', background: 'var(--danger-subtle)' }}>
+          <AlertCircle size={40} className="text-danger" />
+          <h3 className="text-primary font-bold">Failed to load report</h3>
+          <p className="text-secondary text-sm" style={{ maxWidth: '400px' }}>{error}</p>
         </div>
       ) : (
-        <div className="space-y-6 transition duration-300 ease-in-out">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {children}
         </div>
       )}

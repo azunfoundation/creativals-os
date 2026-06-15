@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -8,7 +11,8 @@ import {
   quotes as quotesApi,
   leads as leadsApi,
   services as servicesApi,
-  coupons as couponsApi
+  coupons as couponsApi,
+  platformSettings
 } from '@/lib/api';
 import type { Lead, Service, Quote, QuoteItem } from '@/lib/api';
 import { Plus, Trash2, ArrowLeft, Percent, Tag, Check, X, ShieldAlert, Sparkles } from 'lucide-react';
@@ -43,6 +47,7 @@ const MOCK_SERVICES: Service[] = [
 ];
 
 function QuoteBuilderForm() {
+  const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
@@ -91,9 +96,25 @@ function QuoteBuilderForm() {
     queryFn: async () => {
       try {
         const res = await servicesApi.list();
-        return res.data || MOCK_SERVICES;
+        const data = res.data || [];
+        return data.map((s: any) => ({
+          ...s,
+          base_price: s.base_price || s.default_price || 0
+        }));
       } catch {
         return MOCK_SERVICES;
+      }
+    }
+  });
+
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      try {
+        const res = await platformSettings.get();
+        return res.data;
+      } catch {
+        return null;
       }
     }
   });
@@ -114,7 +135,12 @@ function QuoteBuilderForm() {
     if (editQuote) {
       setTitle(editQuote.title);
       setLeadId(editQuote.lead_id || '');
-      setCurrency(editQuote.currency);
+      if (editQuote.currency) {
+        const code = typeof editQuote.currency === 'object' && editQuote.currency
+          ? (editQuote.currency as any).code
+          : editQuote.currency;
+        setCurrency(code);
+      }
       // Format YYYY-MM-DD
       const dateVal = editQuote.valid_until ? editQuote.valid_until.split('T')[0] : '';
       setValidUntil(dateVal);
@@ -323,18 +349,21 @@ function QuoteBuilderForm() {
   const handleSaveQuote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      alert('Please enter a quote title.');
+      showToast('Please enter a quote title.', 'info');
       return;
     }
     if (lineItems.some(i => i.unit_price < 0 || i.quantity <= 0)) {
-      alert('Line items must have positive quantity and non-negative unit price.');
+      showToast('Line items must have positive quantity and non-negative unit price.', 'info');
       return;
     }
+
+    const selectedCurrencyObj = settings?.currencies?.find(c => c.code === currency);
+    const currencyId = selectedCurrencyObj ? selectedCurrencyObj.id : 1;
 
     const payload = {
       lead_id: leadId ? Number(leadId) : undefined,
       title: title.trim(),
-      currency,
+      currency_id: currencyId,
       valid_until: new Date(validUntil).toISOString(),
       coupon_code: appliedCoupon ? appliedCoupon.code : undefined,
       terms_conditions: terms,
@@ -359,51 +388,53 @@ function QuoteBuilderForm() {
   const leads = leadsRes || MOCK_LEADS;
 
   return (
-    <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-6">
+    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Breadcrumb / Back */}
-      <div className="flex items-center gap-2">
-        <Link href="/quotes" className="p-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <Link href="/quotes" className="btn btn-secondary btn-icon" style={{ padding: '0.375rem' }}>
           <ArrowLeft size={16} />
         </Link>
-        <span className="text-zinc-500 text-sm font-semibold">Back to Quotes</span>
+        <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Back to Quotes</span>
       </div>
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>
           {isEdit ? 'Modify Quotation' : 'Create Quotation Proposal'}
         </h1>
-        <p className="text-sm text-zinc-400 mt-1">
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
           {isEdit ? `Editing drafted Quote #${editQuote?.quote_number || editId}` : 'Add custom service scope details, discount coupon terms, and compute taxes dynamically.'}
         </p>
       </div>
 
-      <form onSubmit={handleSaveQuote} className="space-y-6">
+      <form onSubmit={handleSaveQuote} className="space-y-6" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {/* Core Settings Card */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md space-y-4">
-          <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 pb-2">1. Quote Details</h2>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <h2 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+            1. Quote Details
+          </h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
             {/* Title */}
-            <div className="form-group md:col-span-2">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Quote Title *</label>
+            <div className="form-group" style={{ flex: '2 1 400px' }}>
+              <label className="form-label">Quote Title *</label>
               <input
                 type="text"
                 placeholder="e.g. Enterprise Branding & Copywriting Package"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
                 required
               />
             </div>
 
             {/* Lead selector */}
-            <div className="form-group">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Associated Lead / Client</label>
+            <div className="form-group" style={{ flex: '1 1 200px' }}>
+              <label className="form-label">Associated Lead / Client</label>
               <select
                 value={leadId}
                 onChange={(e) => setLeadId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
               >
                 <option value="">-- Select Lead (Optional) --</option>
                 {leads.map((l) => (
@@ -413,29 +444,37 @@ function QuoteBuilderForm() {
             </div>
 
             {/* Currency selector */}
-            <div className="form-group">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Currency</label>
+            <div className="form-group" style={{ flex: '1 1 200px' }}>
+              <label className="form-label">Currency</label>
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
               >
-                <option value="INR">INR (₹)</option>
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
+                {settings?.currencies?.filter(c => c.is_active).map(c => (
+                  <option key={c.id} value={c.code}>
+                    {c.code} ({c.symbol})
+                  </option>
+                )) || (
+                  <>
+                    <option value="INR">INR (₹)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="GBP">GBP (£)</option>
+                  </>
+                )}
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
             {/* Validity Date */}
-            <div className="form-group md:col-span-1">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Valid Until *</label>
+            <div className="form-group" style={{ flex: '1 1 200px', maxWidth: '300px' }}>
+              <label className="form-label">Valid Until *</label>
               <input
                 type="date"
                 value={validUntil}
                 onChange={(e) => setValidUntil(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
                 required
               />
             </div>
@@ -443,154 +482,170 @@ function QuoteBuilderForm() {
         </div>
 
         {/* Dynamic Line Items Card */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md space-y-4">
-          <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
-            <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider">2. Line Items</h2>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+            <h2 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              2. Line Items
+            </h2>
             <button
               type="button"
               onClick={addLineItem}
-              className="btn btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 hover:bg-zinc-800"
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
             >
               <Plus size={14} /> Add Item Row
             </button>
           </div>
 
           {/* Table Container */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-zinc-800 text-zinc-500 font-bold uppercase tracking-wider">
-                  <th className="pb-2.5 pr-2.5 w-1/4">Service Product</th>
-                  <th className="pb-2.5 pr-2.5 w-1/3">Description</th>
-                  <th className="pb-2.5 pr-2.5 w-[8%] text-center">Qty</th>
-                  <th className="pb-2.5 pr-2.5 w-[14%]">Unit Price ({currency})</th>
-                  <th className="pb-2.5 pr-2.5 w-[8%] text-center">Disc %</th>
-                  <th className="pb-2.5 pr-2.5 w-[8%]">Tax Rate (GST)</th>
-                  <th className="pb-2.5 pr-2.5 w-[12%] text-right">Total ({currency})</th>
-                  <th className="pb-2.5 w-[4%] text-center"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/40">
-                {lineItems.map((item, index) => (
-                  <tr key={index} className="group align-top">
-                    {/* Service selection dropdown */}
-                    <td className="py-3 pr-2.5">
-                      <select
-                        value={item.service_id}
-                        onChange={(e) => handleServiceChange(index, e.target.value ? Number(e.target.value) : '')}
-                        className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                      >
-                        <option value="">-- Custom Scope --</option>
-                        {services.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </td>
-
-                    {/* Description text area */}
-                    <td className="py-3 pr-2.5">
-                      <textarea
-                        rows={2}
-                        value={item.description}
-                        onChange={(e) => handleLineItemChange(index, 'description', e.target.value)}
-                        placeholder="Detailed deliverables description..."
-                        className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-violet-500 text-xs resize-none"
-                      />
-                    </td>
-
-                    {/* Quantity */}
-                    <td className="py-3 pr-2.5 text-center">
-                      <input
-                        type="number"
-                        min={1}
-                        value={item.quantity}
-                        onChange={(e) => handleLineItemChange(index, 'quantity', Number(e.target.value))}
-                        className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-center rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                        required
-                      />
-                    </td>
-
-                    {/* Unit Price */}
-                    <td className="py-3 pr-2.5">
-                      <input
-                        type="number"
-                        min={0}
-                        value={item.unit_price}
-                        onChange={(e) => handleLineItemChange(index, 'unit_price', Number(e.target.value))}
-                        placeholder="0"
-                        className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                        required
-                      />
-                    </td>
-
-                    {/* Discount % */}
-                    <td className="py-3 pr-2.5 text-center">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={item.discount_percentage}
-                        onChange={(e) => handleLineItemChange(index, 'discount_percentage', Number(e.target.value))}
-                        className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-center rounded-lg px-1 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                      />
-                    </td>
-
-                    {/* Tax Rate (GST) */}
-                    <td className="py-3 pr-2.5">
-                      <select
-                        value={item.tax_rate}
-                        onChange={(e) => handleLineItemChange(index, 'tax_rate', Number(e.target.value))}
-                        className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                      >
-                        <option value={0}>0%</option>
-                        <option value={5}>5%</option>
-                        <option value={12}>12%</option>
-                        <option value={18}>18%</option>
-                        <option value={28}>28%</option>
-                      </select>
-                    </td>
-
-                    {/* Row Total (read-only) */}
-                    <td className="py-3 pr-2.5 text-right font-bold text-zinc-200 align-middle">
-                      {formatCurrency(rowCalculations[index]?.totalAmount || 0, currency)}
-                    </td>
-
-                    {/* Remove button */}
-                    <td className="py-3 align-middle text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeLineItem(index)}
-                        disabled={lineItems.length === 1}
-                        className="p-1.5 text-zinc-500 hover:text-red-400 disabled:opacity-30 disabled:hover:text-zinc-500 transition rounded"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+          <div className="data-table-wrap">
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ tableLayout: 'fixed', minWidth: '950px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '22%' }}>Service Product</th>
+                    <th style={{ width: '28%' }}>Description</th>
+                    <th style={{ width: '8%', textAlign: 'center' }}>Qty</th>
+                    <th style={{ width: '14%' }}>Unit Price ({currency})</th>
+                    <th style={{ width: '8%', textAlign: 'center' }}>Disc %</th>
+                    <th style={{ width: '10%' }}>Tax Rate (GST)</th>
+                    <th style={{ width: '12%', textAlign: 'right' }}>Total ({currency})</th>
+                    <th style={{ width: '4%' }}></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {lineItems.map((item, index) => (
+                    <tr key={index}>
+                      {/* Service selection dropdown */}
+                      <td>
+                        <select
+                          value={item.service_id}
+                          onChange={(e) => handleServiceChange(index, e.target.value ? Number(e.target.value) : '')}
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem' }}
+                        >
+                          <option value="">-- Custom Scope --</option>
+                          {services.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* Description text area */}
+                      <td>
+                        <textarea
+                          rows={2}
+                          value={item.description}
+                          onChange={(e) => handleLineItemChange(index, 'description', e.target.value)}
+                          placeholder="Detailed deliverables description..."
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem', resize: 'none', lineHeight: 1.4 }}
+                        />
+                      </td>
+
+                      {/* Quantity */}
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) => handleLineItemChange(index, 'quantity', Number(e.target.value))}
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem', textAlign: 'center' }}
+                          required
+                        />
+                      </td>
+
+                      {/* Unit Price */}
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.unit_price ?? 0}
+                          onChange={(e) => handleLineItemChange(index, 'unit_price', Number(e.target.value))}
+                          placeholder="0"
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem' }}
+                          required
+                        />
+                      </td>
+
+                      {/* Discount % */}
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={item.discount_percentage}
+                          onChange={(e) => handleLineItemChange(index, 'discount_percentage', Number(e.target.value))}
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem', textAlign: 'center' }}
+                        />
+                      </td>
+
+                      {/* Tax Rate (GST) */}
+                      <td>
+                        <select
+                          value={item.tax_rate}
+                          onChange={(e) => handleLineItemChange(index, 'tax_rate', Number(e.target.value))}
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem' }}
+                        >
+                          <option value={0}>0%</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
+                          <option value={18}>18%</option>
+                          <option value={28}>28%</option>
+                        </select>
+                      </td>
+
+                      {/* Row Total (read-only) */}
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'middle' }}>
+                        {formatCurrency(rowCalculations[index]?.totalAmount || 0, currency)}
+                      </td>
+
+                      {/* Remove button */}
+                      <td style={{ verticalAlign: 'middle', textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => removeLineItem(index)}
+                          disabled={lineItems.length === 1}
+                          className="btn btn-danger btn-sm btn-icon"
+                          style={{ opacity: lineItems.length === 1 ? 0.3 : 1 }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
         {/* Footer Grid: Coupon, Terms on Left; Totals on Right */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
           {/* Left Column: Terms, Comments & Coupons */}
-          <div className="lg:col-span-2 space-y-6">
+          <div style={{ flex: '2 1 600px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {/* Coupon Box */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md space-y-4">
-              <div className="flex items-center gap-1.5 border-b border-zinc-800 pb-2">
-                <Tag size={16} className="text-violet-400" />
-                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Discount Coupon Code</h3>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                <Tag size={16} className="text-accent" />
+                <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Discount Coupon Code
+                </h3>
               </div>
 
               {appliedCoupon ? (
-                <div className="bg-violet-950/20 border border-violet-900/40 rounded-lg p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles className="text-violet-400 w-5 h-5 animate-pulse" />
+                <div style={{ background: 'var(--accent-subtle)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <Sparkles className="text-accent" size={18} />
                     <div>
-                      <span className="text-sm font-bold text-zinc-200">Coupon applied: <strong className="text-violet-400 font-mono">{appliedCoupon.code}</strong></span>
-                      <span className="text-xs text-zinc-400 block mt-0.5">
+                      <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Coupon applied: <strong style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>{appliedCoupon.code}</strong>
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginTop: '0.125rem' }}>
                         Discount benefit: {appliedCoupon.discount_type === 'percentage' ? `${appliedCoupon.discount_value}% Off` : `${formatCurrency(appliedCoupon.discount_value, currency)} Off`}
                       </span>
                     </div>
@@ -598,24 +653,25 @@ function QuoteBuilderForm() {
                   <button
                     type="button"
                     onClick={handleRemoveCoupon}
-                    className="p-1 bg-zinc-800 text-zinc-400 hover:text-red-400 hover:bg-zinc-700 rounded transition"
+                    className="btn btn-secondary btn-sm btn-icon"
                   >
                     <X size={14} />
                   </button>
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="text"
                     placeholder="Enter Code (e.g. WELCOME10, FLAT5000)"
                     value={couponCode}
                     onChange={(e) => { setCouponCode(e.target.value); setCouponError(null); }}
-                    className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-violet-500 font-mono uppercase"
+                    className="form-input"
+                    style={{ flex: 1, textTransform: 'uppercase', fontFamily: 'monospace' }}
                   />
                   <button
                     type="button"
                     onClick={handleApplyCoupon}
-                    className="px-4 py-2 bg-zinc-800 text-zinc-200 border border-zinc-750 hover:bg-zinc-750 rounded-lg text-sm transition"
+                    className="btn btn-secondary"
                   >
                     Apply Code
                   </button>
@@ -623,40 +679,44 @@ function QuoteBuilderForm() {
               )}
 
               {couponError && (
-                <p className="text-red-400 text-xs flex items-center gap-1">
+                <p style={{ color: 'var(--danger)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                   <ShieldAlert size={12} /> {couponError}
                 </p>
               )}
               {couponSuccess && (
-                <p className="text-emerald-400 text-xs flex items-center gap-1">
+                <p style={{ color: 'var(--success)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                   <Check size={12} /> {couponSuccess}
                 </p>
               )}
             </div>
 
             {/* Terms & Comments */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md space-y-4">
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 pb-2">3. Terms & Comments</h3>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                3. Terms & Comments
+              </h3>
               
-              <div className="space-y-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-group">
-                  <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Client-facing Terms & Conditions</label>
+                  <label className="form-label">Client-facing Terms & Conditions</label>
                   <textarea
                     rows={4}
                     value={terms}
                     onChange={(e) => setTerms(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 text-zinc-250 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500 resize-none font-mono leading-relaxed"
+                    className="form-input"
+                    style={{ resize: 'none', fontFamily: 'monospace', lineHeight: 1.5, fontSize: '0.8125rem' }}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Internal Staff Comments (Hidden from Client)</label>
+                  <label className="form-label">Internal Staff Comments (Hidden from Client)</label>
                   <textarea
                     rows={2}
                     value={comments}
                     onChange={(e) => setComments(e.target.value)}
                     placeholder="Enter details on margins, sales velocity, custom requirements, etc."
-                    className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                    className="form-input"
+                    style={{ resize: 'none', fontSize: '0.8125rem' }}
                   />
                 </div>
               </div>
@@ -664,54 +724,57 @@ function QuoteBuilderForm() {
           </div>
 
           {/* Right Column: Totals Summary */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md h-fit space-y-5">
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 pb-2">4. Quotation Totals</h3>
+          <div className="card" style={{ flex: '1 1 300px', height: 'fit-content', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+              4. Quotation Totals
+            </h3>
 
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-center text-zinc-400">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.875rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
                 <span>Subtotal (Base Sum)</span>
-                <span className="font-semibold text-zinc-200">{formatCurrency(subtotalSum, currency)}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatCurrency(subtotalSum, currency)}</span>
               </div>
-              <div className="flex justify-between items-center text-zinc-400">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
                 <span>Line Item Discounts</span>
-                <span className="font-semibold text-red-400">-{formatCurrency(itemsDiscountSum, currency)}</span>
+                <span style={{ fontWeight: 600, color: 'var(--danger)' }}>-{formatCurrency(itemsDiscountSum, currency)}</span>
               </div>
-              <div className="flex justify-between items-center text-zinc-400 border-t border-zinc-800 pt-2.5">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)', borderTop: '1px solid var(--border)', paddingTop: '0.625rem' }}>
                 <span>Taxable Value</span>
-                <span className="font-semibold text-zinc-200">{formatCurrency(subtotalSum - itemsDiscountSum, currency)}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatCurrency(subtotalSum - itemsDiscountSum, currency)}</span>
               </div>
-              <div className="flex justify-between items-center text-zinc-400">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
                 <span>Taxes (GST)</span>
-                <span className="font-semibold text-zinc-200">{formatCurrency(taxSum, currency)}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatCurrency(taxSum, currency)}</span>
               </div>
 
               {appliedCoupon && (
-                <div className="flex justify-between items-center text-violet-400 font-semibold border-t border-dashed border-zinc-800 pt-2.5">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--accent)', fontWeight: 600, borderTop: '1px dashed var(--border)', paddingTop: '0.625rem' }}>
                   <span>Coupon Discount ({appliedCoupon.code})</span>
                   <span>-{formatCurrency(couponDiscountAmount, currency)}</span>
                 </div>
               )}
 
-              <div className="flex justify-between items-center border-t border-zinc-800 pt-3 mt-2">
-                <span className="text-base font-bold text-zinc-200">Net Estimated Total</span>
-                <span className="text-xl font-extrabold text-violet-400">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
+                <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Net Estimated Total</span>
+                <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent)' }}>
                   {formatCurrency(finalNetTotal, currency)}
                 </span>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-zinc-800 flex flex-col gap-2">
+            <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <button
                 id="save-quote-submit"
                 type="submit"
-                className="w-full btn btn-primary py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5"
+                className="w-full btn btn-primary"
+                style={{ padding: '0.625rem 1rem' }}
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
                 {createMutation.isPending || updateMutation.isPending ? 'Saving...' : (isEdit ? 'Save Changes' : 'Save as Draft')}
               </button>
               <Link
                 href="/quotes"
-                className="w-full btn btn-secondary py-2.5 font-semibold text-sm text-center block hover:bg-zinc-800"
+                className="w-full btn btn-secondary text-center block"
               >
                 Cancel
               </Link>
@@ -724,10 +787,11 @@ function QuoteBuilderForm() {
 }
 
 export default function CreateQuotePage() {
+  const { showToast } = useToast();
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center p-12 min-h-screen bg-zinc-950">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem', minHeight: '100vh', background: 'var(--background)' }}>
+        <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', borderBottom: '2px solid var(--accent)', animation: 'pulse 1.5s infinite' }} />
       </div>
     }>
       <QuoteBuilderForm />

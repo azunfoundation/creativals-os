@@ -73,6 +73,7 @@ export interface Role {
   name: string;
   display_name: string;
   color?: string;
+  description?: string;
 }
 
 export interface Permission {
@@ -234,7 +235,7 @@ export interface UpdateLeadData {
 }
 
 export interface ConvertLeadData {
-  quote_name: string;
+  quote_title: string;  // backend validates 'quote_title'
   valid_until: string;
 }
 
@@ -264,6 +265,18 @@ export const auth = {
   logout: () => api.post('/auth/logout'),
 
   me: () => api.get<User>('/auth/me'),
+
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+
+  resetPassword: (data: { token: string; email: string; password: string; password_confirmation: string }) =>
+    api.post('/auth/reset-password', data),
+
+  changePassword: (data: { current_password: string; password: string; password_confirmation: string }) =>
+    api.post('/auth/change-password', data),
+
+  loginActivity: (params?: Record<string, any>) =>
+    api.get('/auth/login-activity', { params }),
 };
 
 // ============================================================
@@ -288,6 +301,7 @@ export interface CreateUserData {
   status?: string;
   role_ids?: number[];
   department_ids?: number[];
+  is_client_portal_user?: boolean;
 }
 
 export interface UpdateUserData {
@@ -298,11 +312,15 @@ export interface UpdateUserData {
   status?: string;
   role_ids?: number[];
   department_ids?: number[];
+  is_client_portal_user?: boolean;
 }
 
 export const users = {
   list: (params?: UserListParams) =>
     api.get<{ data: User[]; meta: PaginationMeta }>('/users', { params }),
+
+  show: (id: number) =>
+    api.get<{ data: User }>(`/users/${id}`),
 
   create: (data: CreateUserData) =>
     api.post<User>('/users', data),
@@ -318,14 +336,57 @@ export const users = {
 };
 
 // ============================================================
+// Credit Notes API
+// ============================================================
+export interface CreditNote {
+  id: number;
+  credit_note_number: string;
+  invoice_id: number;
+  amount: number;
+  reason?: string;
+  issue_date: string;
+  status: 'draft' | 'issued';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCreditNoteData {
+  invoice_id: number;
+  amount: number;
+  reason?: string;
+  issue_date: string;
+}
+
+export interface CreditNoteListParams {
+  page?: number;
+  per_page?: number;
+  invoice_id?: number;
+}
+
+export const creditNotes = {
+  list: (params?: CreditNoteListParams) =>
+    api.get<{ data: CreditNote[]; meta: PaginationMeta }>('/credit-notes', { params }),
+  create: (data: CreateCreditNoteData) => api.post<CreditNote>('/credit-notes', data),
+};
+
+// ============================================================
 // Roles API
 // ============================================================
 
 export const roles = {
   list: () => api.get<Role[]>('/roles'),
 
+  create: (data: { name: string; description?: string; permission_ids?: number[] }) =>
+    api.post<Role>('/roles', data),
+
+  update: (id: number, data: { name?: string; description?: string }) =>
+    api.put<Role>(`/roles/${id}`, data),
+
+  delete: (id: number) =>
+    api.delete(`/roles/${id}`),
+
   syncPermissions: (id: number, permissionIds: number[]) =>
-    api.post(`/roles/${id}/sync-permissions`, { permission_ids: permissionIds }),
+    api.put(`/roles/${id}/permissions`, { permission_ids: permissionIds }),
 };
 
 // ============================================================
@@ -566,7 +627,8 @@ export interface QuoteListParams {
 export interface CreateQuoteData {
   lead_id?: number;
   title: string;
-  currency: string;
+  currency_id: number;
+  currency?: string;
   valid_until: string;
   coupon_code?: string;
   terms_conditions?: string;
@@ -644,6 +706,8 @@ export const quotes = {
   submitApproval: (id: number) => api.post<Quote>(`/quotes/${id}/submit-approval`),
   approve: (id: number, comments?: string) => api.post<Quote>(`/quotes/${id}/approve`, { comments }),
   reject: (id: number, comments?: string) => api.post<Quote>(`/quotes/${id}/reject`, { comments }),
+  send: (id: number) => api.post<void>(`/quotes/${id}/send`),
+  downloadPdf: (id: number) => api.get<Blob>(`/quotes/${id}/pdf`, { responseType: 'blob' }),
 };
 
 // ============================================================
@@ -713,6 +777,9 @@ export interface Invoice {
   balance_amount: number;
   terms_conditions?: string;
   notes?: string;
+  is_recurring?: boolean;
+  recurring_interval?: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  recurring_end_date?: string;
   items: InvoiceItem[];
   payments?: Payment[];
   approval_status?: 'draft' | 'pending' | 'approved' | 'rejected';
@@ -740,6 +807,9 @@ export interface CreateInvoiceData {
   due_date: string;
   terms_conditions?: string;
   notes?: string;
+  is_recurring?: boolean;
+  recurring_interval?: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  recurring_end_date?: string;
   items: Array<{
     service_id?: number;
     description: string;
@@ -780,6 +850,9 @@ export const invoices = {
   create: (data: CreateInvoiceData) => api.post<Invoice>('/invoices', data),
   update: (id: number, data: UpdateInvoiceData) => api.put<Invoice>(`/invoices/${id}`, data),
   delete: (id: number) => api.delete(`/invoices/${id}`),
+  send: (id: number) => api.post<void>(`/invoices/${id}/send`),
+  downloadPdf: (id: number) => api.get<Blob>(`/invoices/${id}/pdf`, { responseType: 'blob' }),
+  recordPayment: (id: number, data: any) => api.post<Payment>(`/invoices/${id}/payments`, data),
 };
 
 // ============================================================
@@ -807,12 +880,13 @@ export interface Project {
   invoice_number?: string;
   manager_id?: number;
   manager?: User;
-  status: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
+  status: 'planning' | 'in_progress' | 'active' | 'on_hold' | 'completed' | 'cancelled';
   completion_percentage: number;
   start_date: string;
   end_date: string;
   budget_hours: number;
   budget: number;
+  budget_amount?: number;
   description?: string;
   departments?: Department[];
   members?: User[];
@@ -858,6 +932,32 @@ export interface TaskComment {
   created_at: string;
 }
 
+export interface TaskAttachment {
+  id: number;
+  task_id: number;
+  uploaded_by: number;
+  uploader?: User;
+  filename: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectDocument {
+  id: number;
+  project_id: number;
+  uploaded_by: number;
+  uploader?: User;
+  filename: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Timesheet {
   id: number;
   user_id: number;
@@ -876,6 +976,28 @@ export interface Timesheet {
   submitted_at?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+export function mapTimesheetBackendToFrontend(t: any): Timesheet {
+  if (!t) return t;
+  return {
+    ...t,
+    hours: parseFloat(t.hours_logged) || parseFloat(t.hours) || 0,
+    billable: t.is_billable !== undefined ? !!t.is_billable : (t.billable !== undefined ? !!t.billable : true)
+  };
+}
+
+export function mapTimesheetFrontendToBackend(t: any): any {
+  if (!t) return t;
+  const { hours, billable, ...rest } = t;
+  const result: any = { ...rest };
+  if (hours !== undefined) {
+    result.hours_logged = parseFloat(hours) || 0;
+  }
+  if (billable !== undefined) {
+    result.is_billable = !!billable;
+  }
+  return result;
 }
 
 export interface ProjectProfitability {
@@ -909,8 +1031,17 @@ export const projects = {
   removeMember: (id: number, userId: number) => api.delete<void>(`/projects/${id}/members/${userId}`),
   profitability: (id: number) => api.get<ProjectProfitability>(`/projects/${id}/profitability`),
   milestones: (id: number) => api.get<Milestone[]>(`/projects/${id}/milestones`),
-  timesheets: (id: number) => api.get<Timesheet[]>(`/projects/${id}/timesheets`),
+  timesheets: async (id: number) => {
+    const res = await api.get<Timesheet[]>(`/projects/${id}/timesheets`);
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map(mapTimesheetBackendToFrontend);
+    }
+    return res;
+  },
   tasks: (id: number) => api.get<Task[]>(`/projects/${id}/tasks`),
+  listDocuments: (id: number) => api.get<ProjectDocument[]>(`/projects/${id}/documents`),
+  addDocument: (id: number, data: { filename: string; file_path: string; file_size?: number; mime_type?: string }) => api.post<ProjectDocument>(`/projects/${id}/documents`, data),
+  deleteDocument: (id: number, documentId: number) => api.delete(`/projects/${id}/documents/${documentId}`),
 };
 
 export const tasks = {
@@ -923,18 +1054,81 @@ export const tasks = {
   updateCompletion: (id: number, pct: number) => api.patch<Task>(`/tasks/${id}/completion`, { completion_percentage: pct }),
   addComment: (id: number, data: { comment: string; is_internal: boolean }) => api.post<TaskComment>(`/tasks/${id}/comments`, data),
   listComments: (id: number) => api.get<TaskComment[]>(`/tasks/${id}/comments`),
-  logTime: (id: number, data: { date: string; hours: number; description?: string; billable: boolean }) => api.post<Timesheet>(`/tasks/${id}/time-log`, data),
+  logTime: async (id: number, data: { date: string; hours: number; description?: string; billable: boolean }) => {
+    const backendData = {
+      date: data.date,
+      hours_logged: data.hours,
+      description: data.description,
+      is_billable: data.billable
+    };
+    const res = await api.post<Timesheet>(`/tasks/${id}/time-log`, backendData);
+    if (res.data) {
+      res.data = mapTimesheetBackendToFrontend(res.data);
+    }
+    return res;
+  },
+  listAttachments: (id: number) => api.get<TaskAttachment[]>(`/tasks/${id}/attachments`),
+  addAttachment: (id: number, data: { filename: string; file_path: string; file_size?: number; mime_type?: string }) => api.post<TaskAttachment>(`/tasks/${id}/attachments`, data),
+  deleteAttachment: (id: number, attachmentId: number) => api.delete(`/tasks/${id}/attachments/${attachmentId}`),
 };
 
 export const timesheets = {
-  list: (params?: any) => api.get<{ data: Timesheet[]; meta?: PaginationMeta }>('/timesheets', { params }),
-  create: (data: any) => api.post<Timesheet>('/timesheets', data),
-  update: (id: number, data: any) => api.put<Timesheet>(`/timesheets/${id}`, data),
+  list: async (params?: any) => {
+    const res = await api.get<{ data: Timesheet[]; meta?: PaginationMeta }>('/timesheets', { params });
+    if (res.data) {
+      if (Array.isArray(res.data.data)) {
+        res.data.data = res.data.data.map(mapTimesheetBackendToFrontend);
+      } else if (Array.isArray(res.data)) {
+        res.data = (res.data as any).map(mapTimesheetBackendToFrontend);
+      }
+    }
+    return res;
+  },
+  create: async (data: any) => {
+    const backendData = mapTimesheetFrontendToBackend(data);
+    const res = await api.post<Timesheet>('/timesheets', backendData);
+    if (res.data) {
+      res.data = mapTimesheetBackendToFrontend(res.data);
+    }
+    return res;
+  },
+  update: async (id: number, data: any) => {
+    const backendData = mapTimesheetFrontendToBackend(data);
+    const res = await api.put<Timesheet>(`/timesheets/${id}`, backendData);
+    if (res.data) {
+      res.data = mapTimesheetBackendToFrontend(res.data);
+    }
+    return res;
+  },
   delete: (id: number) => api.delete(`/timesheets/${id}`),
-  submit: (id: number) => api.post<Timesheet>(`/timesheets/${id}/submit`),
-  approve: (id: number) => api.post<Timesheet>(`/timesheets/${id}/approve`),
-  reject: (id: number, notes: string) => api.post<Timesheet>(`/timesheets/${id}/reject`, { notes }),
-  pending: () => api.get<Timesheet[]>('/timesheets/pending'),
+  submit: async (id: number) => {
+    const res = await api.post<Timesheet>(`/timesheets/${id}/submit`);
+    if (res.data) {
+      res.data = mapTimesheetBackendToFrontend(res.data);
+    }
+    return res;
+  },
+  approve: async (id: number) => {
+    const res = await api.post<Timesheet>(`/timesheets/${id}/approve`);
+    if (res.data) {
+      res.data = mapTimesheetBackendToFrontend(res.data);
+    }
+    return res;
+  },
+  reject: async (id: number, notes: string) => {
+    const res = await api.post<Timesheet>(`/timesheets/${id}/reject`, { notes });
+    if (res.data) {
+      res.data = mapTimesheetBackendToFrontend(res.data);
+    }
+    return res;
+  },
+  pending: async () => {
+    const res = await api.get<Timesheet[]>('/timesheets/pending');
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map(mapTimesheetBackendToFrontend);
+    }
+    return res;
+  },
 };
 
 // ============================================================
@@ -1046,6 +1240,9 @@ export interface EmployeeCompensation {
   currency_id: number;
   expected_monthly_hours: number;
   hourly_rate: number;
+  tds_percent?: number;
+  pf_percent?: number;
+  esi_percent?: number;
   effective_from: string;
   effective_until?: string;
   is_current: boolean;
@@ -1084,6 +1281,9 @@ export const payroll = {
   getRunDetails: (id: number) => api.get<PayrollRun>(`/payroll-runs/${id}`),
   approveRun: (id: number, notes?: string) => api.post<PayrollRun>(`/payroll-runs/${id}/approve`, { notes }),
   costAllocation: (id: number) => api.get<ProjectCostAllocation[]>(`/payroll-runs/${id}/cost-allocation`),
+  myHistory: (params?: any) => api.get<{ data: PayrollRunItem[]; meta?: PaginationMeta }>('/payroll-runs/my-history', { params }),
+  downloadPayslip: (itemId: number) => api.get<Blob>(`/payroll-runs/items/${itemId}/pdf`, { responseType: 'blob' }),
+  exportRun: (runId: number, format: 'csv' | 'pdf') => api.get<Blob>(`/payroll-runs/${runId}/export`, { params: { format }, responseType: 'blob' }),
 };
 
 export const expenses = {
@@ -1512,6 +1712,10 @@ export interface ClientReportRow {
   client_id: number;
   client_name: string;
   client_email: string;
+  phone?: string | null;
+  status: 'active' | 'inactive' | 'suspended';
+  is_client_portal_user: boolean;
+  health_score: number;
   active_projects: number;
   total_projects: number;
   total_billed: number;
@@ -1521,6 +1725,19 @@ export interface ClientReportRow {
   last_payment_date: string | null;
 }
 
+export interface ClientCommunication {
+  id: number;
+  client_id: number;
+  recorded_by: number;
+  recorder?: User;
+  type: 'email' | 'call' | 'meeting' | 'other';
+  subject: string;
+  content?: string;
+  communication_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ClientReportData {
   period: { from: string; to: string };
   summary: ClientReportSummary;
@@ -1528,6 +1745,9 @@ export interface ClientReportData {
 }
 
 export const reports = {
+  getDashboardSummary: () =>
+    api.get<any>('/reports/dashboard'),
+
   getRevenue: (params?: ReportParams) =>
     api.get<RevenueReportData>('/reports/revenue', { params }),
   
@@ -1563,6 +1783,7 @@ export interface CompanySettings {
   company_phone: string;
   company_address: string;
   timezone: string;
+  date_format?: string;
   logo_url?: string | null;
 }
 
@@ -1637,6 +1858,7 @@ export interface BackupFile {
 export const platformSettings = {
   get: () => api.get<SystemSettings>('/settings'),
   updateCompany: (data: CompanySettings) => api.put<void>('/settings/company', data),
+  updateSmtp: (data: any) => api.put<void>('/settings/smtp', data),
   updateTax: (data: TaxSettings) => api.put<void>('/settings/tax', data),
   updateNumberSequences: (sequences: NumberSequence[]) => api.put<void>('/settings/number-sequences', { sequences }),
   updateCurrencies: (data: { default_currency_code: string; active_currency_codes: string[] }) =>
@@ -1656,5 +1878,186 @@ export const backups = {
   restore: (filename: string) => api.post<void>(`/backups/${filename}/restore`),
   delete: (filename: string) => api.delete<void>(`/backups/${filename}`),
 };
+
+export const systemReset = {
+  resetPlatform: (data: { password?: string; confirmation?: string }) =>
+    api.post('/system/reset', data),
+  resetModule: (data: { module: string; password?: string }) =>
+    api.post('/system/reset/module', data),
+  factoryReset: (data: { password?: string; confirmation?: string }) =>
+    api.post('/system/factory-reset', data),
+};
+
+export const attendanceApi = {
+  today: () => api.get('/attendance/today'),
+  team: () => api.get('/attendance/team'),
+  summary: (params?: Record<string, any>) => api.get('/attendance/summary', { params }),
+  list: (params?: Record<string, any>) => api.get('/attendance', { params }),
+  clockIn: (data?: object) => api.post('/attendance/clock-in', data || {}),
+  clockOut: (data?: object) => api.post('/attendance/clock-out', data || {}),
+  update: (id: number, data: object) => api.put(`/attendance/${id}`, data),
+  delete: (id: number) => api.delete(`/attendance/${id}`),
+};
+
+export const leaveApi = {
+  types: () => api.get('/leave/types'),
+  list: (params?: Record<string, any>) => api.get('/leave/requests', { params }),
+  create: (data: object) => api.post('/leave/requests', data),
+  approve: (id: number) => api.post(`/leave/requests/${id}/approve`),
+  reject: (id: number, data: object) => api.post(`/leave/requests/${id}/reject`, data),
+  delete: (id: number) => api.delete(`/leave/requests/${id}`),
+};
+
+export const holidaysApi = {
+  list: (params?: Record<string, any>) => api.get('/holidays', { params }),
+  create: (data: object) => api.post('/holidays', data),
+  update: (id: number, data: object) => api.put(`/holidays/${id}`, data),
+  delete: (id: number) => api.delete(`/holidays/${id}`),
+};
+
+export const notificationPreferences = {
+  get: () => api.get('/settings/notifications'),
+  update: (preferences: any[]) => api.put('/settings/notifications', { preferences }),
+};
+
+export interface FileUploadResponse {
+  filename: string;
+  file_path: string;
+  url: string;
+  mime_type: string;
+  file_size: number;
+}
+
+export const filesApi = {
+  upload: (file: File, type?: 'avatar' | 'logo' | 'receipt' | 'attachment') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (type) {
+      formData.append('type', type);
+    }
+    return api.post<FileUploadResponse>('/files/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+};
+
+export const clientsApi = {
+  listCommunications: (clientId: number) =>
+    api.get<ClientCommunication[]>(`/clients/${clientId}/communications`),
+
+  createCommunication: (clientId: number, data: { type: string; subject: string; content?: string; communication_date: string }) =>
+    api.post<ClientCommunication>(`/clients/${clientId}/communications`, data),
+
+  deleteCommunication: (clientId: number, id: number) =>
+    api.delete(`/clients/${clientId}/communications/${id}`),
+};
+
+// ============================================================
+// AI Assistant Endpoints
+// ============================================================
+
+export interface AiConversation {
+  id: number;
+  title: string;
+  is_pinned: boolean;
+  is_saved: boolean;
+  created_at: string;
+  updated_at: string;
+  messages?: AiMessage[];
+}
+
+export interface AiMessage {
+  id: number;
+  conversation_id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  reactions?: string[];
+  created_at: string;
+  attachments?: AiAttachment[];
+}
+
+export interface AiAttachment {
+  id: number;
+  filename: string;
+  file_path: string;
+  mime_type: string;
+  file_size: number;
+  url: string;
+}
+
+export interface AiAutomation {
+  id: number;
+  name: string;
+  trigger_event: string;
+  conditions: any[];
+  actions: any[];
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AiActionConfirmation {
+  action: string;
+  params: any;
+  message: string;
+}
+
+export interface AiChatResponse {
+  conversation_id: number;
+  action_confirmation?: AiActionConfirmation;
+  message: AiMessage;
+}
+
+export const aiApi = {
+  listConversations: (search?: string) =>
+    api.get<AiConversation[]>('/ai/conversations', { params: { search } }),
+
+  createConversation: (title: string) =>
+    api.post<AiConversation>('/ai/conversations', { title }),
+
+  getConversation: (id: number) =>
+    api.get<AiConversation>(`/ai/conversations/${id}`),
+
+  deleteConversation: (id: number) =>
+    api.delete(`/ai/conversations/${id}`),
+
+  togglePin: (id: number) =>
+    api.put<AiConversation>(`/ai/conversations/${id}/pin`),
+
+  toggleSave: (id: number) =>
+    api.put<AiConversation>(`/ai/conversations/${id}/save`),
+
+  reactToMessage: (id: number, reaction: string) =>
+    api.post<AiMessage>(`/ai/messages/${id}/react`, { reaction }),
+
+  chat: (data: {
+    content?: string;
+    conversation_id?: number;
+    attachments?: Array<{ filename: string; file_path: string; mime_type: string; file_size: number }>;
+    confirmed_action?: string;
+    confirmed_params?: any;
+  }) => api.post<AiChatResponse>('/ai/chat', data),
+
+  voiceTalk: (content: string, conversationId?: number) =>
+    api.post<{ conversation_id: number; response_text: string }>('/ai/voice/talk', {
+      content,
+      conversation_id: conversationId,
+    }),
+
+  listAutomations: () =>
+    api.get<AiAutomation[]>('/ai/automations'),
+
+  createAutomation: (data: { name: string; trigger_event: string; conditions?: any[]; actions: any[]; is_active?: boolean }) =>
+    api.post<AiAutomation>('/ai/automations', data),
+
+  updateAutomation: (id: number, data: Partial<AiAutomation>) =>
+    api.put<AiAutomation>(`/ai/automations/${id}`, data),
+
+  deleteAutomation: (id: number) =>
+    api.delete(`/ai/automations/${id}`),
+};
+
+
 
 

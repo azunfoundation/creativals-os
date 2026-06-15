@@ -26,7 +26,7 @@ const features = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoading, error, isAuthenticated, clearError } = useAuthStore();
+  const { login, isLoading, error, isAuthenticated, clearError, user } = useAuthStore();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,9 +35,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace('/dashboard');
+      if (user?.must_change_password) {
+        router.replace('/settings/change-password');
+      } else {
+        router.replace('/dashboard');
+      }
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, user, router]);
 
   useEffect(() => {
     return () => {
@@ -65,7 +69,12 @@ export default function LoginPage() {
     setFieldErrors({});
     try {
       await login(email, password);
-      router.replace('/dashboard');
+      const updatedUser = useAuthStore.getState().user;
+      if (updatedUser?.must_change_password) {
+        router.replace('/settings/change-password');
+      } else {
+        router.replace('/dashboard');
+      }
     } catch {
       // error is set in store
     }
@@ -254,6 +263,7 @@ export default function LoginPage() {
                 <label className="form-label" htmlFor="password">Password</label>
                 <button
                   type="button"
+                  onClick={() => router.push('/forgot-password')}
                   style={{ color: 'var(--accent)', fontSize: '0.8125rem', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer' }}
                 >
                   Forgot password?

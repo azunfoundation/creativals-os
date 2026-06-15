@@ -19,50 +19,88 @@ class LeadResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Build stage object - exposed under BOTH 'stage' and 'lead_stage' for compatibility
+        $stageData = $this->stage ? [
+            'id'         => $this->stage->id,
+            'name'       => $this->stage->name,
+            'slug'       => $this->stage->slug,
+            'color'      => $this->stage->color,
+            'sort_order' => $this->stage->sort_order,
+            'is_system'  => $this->stage->is_system,
+        ] : null;
+
+        // Build source object - exposed under BOTH 'source' and 'lead_source' for compatibility
+        $sourceData = $this->source ? [
+            'id'   => $this->source->id,
+            'name' => $this->source->name,
+            'slug' => $this->source->slug,
+            'color' => $this->source->color,
+            'icon' => $this->source->icon,
+        ] : null;
+
         return [
-            'id' => $this->id,
-            'lead_number' => $this->lead_number,
-            'company_name' => $this->company_name,
-            'website_url' => $this->website_url,
-            'whatsapp_number' => $this->whatsapp_number,
-            'city' => $this->city,
-            'country' => $this->country,
-            'timezone' => $this->timezone,
-            'priority' => $this->priority,
-            'temperature' => $this->temperature,
-            'estimated_monthly_budget' => $this->estimated_monthly_budget,
-            'expected_start_date' => $this->expected_start_date?->toDateString(),
-            'notes' => $this->notes,
-            'is_converted' => $this->is_converted,
-            'converted_client_id' => $this->converted_client_id,
-            'converted_at' => $this->converted_at?->toDateTimeString(),
-            'lead_source' => $this->source ? [
-                'id' => $this->source->id,
-                'name' => $this->source->name,
-            ] : null,
-            'lead_stage' => $this->stage ? [
-                'id' => $this->stage->id,
-                'name' => $this->stage->name,
-                'color' => $this->stage->color,
-            ] : null,
-            'sales_exec' => $this->salesExec ? [
-                'id' => $this->salesExec->id,
+            // Core identifiers
+            'id'                       => $this->id,
+            'lead_number'              => $this->lead_number,
+
+            // Company info
+            'company_name'             => $this->company_name,
+            'website_url'              => $this->website_url,
+            'whatsapp_number'          => $this->whatsapp_number,
+            'city'                     => $this->city,
+            'country'                  => $this->country,
+            'timezone'                 => $this->timezone,
+
+            // Priority / temperature
+            'priority'                 => $this->priority,
+            'temperature'              => $this->temperature,
+
+            // Budget - exposed under BOTH field names so frontend works regardless of which it reads
+            'estimated_monthly_budget' => (float) ($this->estimated_monthly_budget ?? 0),
+            'budget'                   => (float) ($this->estimated_monthly_budget ?? 0),
+
+            // Dates
+            'expected_start_date'      => $this->expected_start_date?->toDateString(),
+            'notes'                    => $this->notes,
+
+            // Conversion status
+            'is_converted'             => $this->is_converted,
+            'converted_client_id'      => $this->converted_client_id,
+            'converted_at'             => $this->converted_at?->toDateTimeString(),
+
+            // Foreign keys - exposed directly so frontend can filter/match
+            'stage_id'                 => $this->stage_id,
+            'source_id'                => $this->lead_source_id, // map DB col → frontend expectation
+            'lead_source_id'           => $this->lead_source_id,
+            'sales_exec_id'            => $this->sales_exec_id,
+            'sales_head_id'            => $this->sales_head_id,
+            'created_by'               => $this->created_by,
+
+            // Related objects - exposed under BOTH naming conventions
+            'stage'                    => $stageData,
+            'lead_stage'               => $stageData,
+            'source'                   => $sourceData,
+            'lead_source'              => $sourceData,
+
+            'sales_exec'               => $this->salesExec ? [
+                'id'   => $this->salesExec->id,
                 'name' => $this->salesExec->name,
             ] : null,
-            'sales_head' => $this->salesHead ? [
-                'id' => $this->salesHead->id,
+
+            'sales_head'               => $this->salesHead ? [
+                'id'   => $this->salesHead->id,
                 'name' => $this->salesHead->name,
             ] : null,
-            'contacts' => LeadContactResource::collection($this->when(
-                $this->relationLoaded('contacts'),
-                fn() => $this->contacts,
-                fn() => $this->contacts
-            )),
-            'activities' => LeadActivityResource::collection($this->when(
-                $this->relationLoaded('activities'),
-                fn() => $this->activities,
-                fn() => $this->activities
-            )),
+
+            // Collections
+            'contacts'   => LeadContactResource::collection(
+                $this->relationLoaded('contacts') ? $this->contacts : $this->contacts
+            ),
+            'activities' => LeadActivityResource::collection(
+                $this->relationLoaded('activities') ? $this->activities : $this->activities
+            ),
+
+            // Timestamps
             'created_at' => $this->created_at?->toDateTimeString(),
             'updated_at' => $this->updated_at?->toDateTimeString(),
         ];

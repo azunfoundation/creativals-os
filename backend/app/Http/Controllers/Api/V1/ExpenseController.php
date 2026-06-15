@@ -171,7 +171,7 @@ class ExpenseController extends Controller
         }
 
         $expense->update([
-            'status' => 'approved',
+            'status'      => 'approved',
             'approved_by' => $request->user()->id,
         ]);
 
@@ -180,4 +180,33 @@ class ExpenseController extends Controller
             'expense' => $expense->load(['category', 'project', 'vendor', 'approver'])
         ]);
     }
+
+    public function reject(Request $request, Expense $expense): JsonResponse
+    {
+        if (!Gate::allows('approve', $expense)) {
+            return response()->json(['message' => 'This action is unauthorized.'], 403);
+        }
+
+        if (!in_array($expense->status, ['submitted', 'pending_approval'], true)) {
+            return response()->json([
+                'message' => 'Only submitted expenses can be rejected.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'rejection_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $expense->update([
+            'status'           => 'rejected',
+            'approved_by'      => $request->user()->id,
+            'rejection_reason' => $validated['rejection_reason'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Expense rejected.',
+            'expense' => $expense->load(['category', 'project', 'vendor', 'approver'])
+        ]);
+    }
 }
+

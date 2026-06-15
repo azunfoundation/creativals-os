@@ -25,6 +25,9 @@ class EmployeeCompensation extends Model
         'effective_until',
         'is_current',
         'notes',
+        'tds_percent',
+        'pf_percent',
+        'esi_percent',
     ];
 
     protected function casts(): array
@@ -36,6 +39,9 @@ class EmployeeCompensation extends Model
             'effective_from' => 'date',
             'effective_until' => 'date',
             'is_current' => 'boolean',
+            'tds_percent' => 'decimal:2',
+            'pf_percent' => 'decimal:2',
+            'esi_percent' => 'decimal:2',
         ];
     }
 

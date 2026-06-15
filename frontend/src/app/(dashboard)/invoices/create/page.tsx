@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -41,6 +44,7 @@ const MOCK_SERVICES: Service[] = [
 ];
 
 function InvoiceBuilderForm() {
+  const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const quoteParamId = searchParams.get('quoteId') || searchParams.get('quote_id');
@@ -58,6 +62,9 @@ function InvoiceBuilderForm() {
     '1. Payment Mode: Bank Transfer / UPI.\n2. Interest of 2% per month will be charged on overdue invoices after the due date.\n3. All disputes are subject to local jurisdiction.'
   );
   const [notes, setNotes] = useState('Thank you for choosing Creativals!');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringInterval, setRecurringInterval] = useState<'weekly' | 'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [recurringEndDate, setRecurringEndDate] = useState('');
   const [lineItems, setLineItems] = useState<LineItemState[]>([
     { service_id: '', description: '', quantity: 1, unit_price: 0, discount_percentage: 0, tax_rate: 18 }
   ]);
@@ -99,7 +106,11 @@ function InvoiceBuilderForm() {
     queryFn: async () => {
       try {
         const res = await servicesApi.list();
-        return res.data;
+        const data = res.data || [];
+        return data.map((s: any) => ({
+          ...s,
+          base_price: s.base_price || s.default_price || 0
+        }));
       } catch {
         return MOCK_SERVICES;
       }
@@ -223,15 +234,15 @@ function InvoiceBuilderForm() {
   const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      alert('Please enter an invoice title.');
+      showToast('Please enter an invoice title.', 'info');
       return;
     }
     if (!clientName.trim()) {
-      alert('Please specify the client name.');
+      showToast('Please specify the client name.', 'info');
       return;
     }
     if (lineItems.some(i => i.unit_price < 0 || i.quantity <= 0)) {
-      alert('Line items must have positive quantity and non-negative unit price.');
+      showToast('Line items must have positive quantity and non-negative unit price.', 'info');
       return;
     }
 
@@ -246,6 +257,9 @@ function InvoiceBuilderForm() {
       due_date: dueDate,
       terms_conditions: terms,
       notes,
+      is_recurring: isRecurring,
+      recurring_interval: isRecurring ? recurringInterval : undefined,
+      recurring_end_date: (isRecurring && recurringEndDate) ? recurringEndDate : undefined,
       items: lineItems.map(item => ({
         service_id: item.service_id ? Number(item.service_id) : undefined,
         description: item.description,
@@ -316,37 +330,38 @@ function InvoiceBuilderForm() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-6">
+    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Back button */}
-      <div className="flex items-center gap-2">
-        <Link href="/invoices" className="p-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <Link href="/invoices" className="btn btn-secondary btn-icon" style={{ padding: '0.5rem' }}>
           <ArrowLeft size={16} />
         </Link>
-        <span className="text-zinc-500 text-sm font-semibold">Back to Invoices</span>
+        <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Back to Invoices</span>
       </div>
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
+      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1.25rem' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           Create Client Invoice
         </h1>
-        <p className="text-sm text-zinc-400 mt-1">
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
           Draft a custom client invoice or import line items and scope agreements directly from a pre-approved quotation.
         </p>
       </div>
 
       {/* Pre-fill toolbar */}
-      <div className="bg-zinc-900 border border-zinc-850 p-4 rounded-xl flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
-        <div className="flex items-center gap-2 text-zinc-300">
-          <FileText size={18} className="text-violet-500" />
-          <span className="text-xs font-bold uppercase tracking-wider">Convert Approved Quotation</span>
+      <div className="card" style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+          <FileText size={18} className="text-accent" />
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Convert Approved Quotation</span>
         </div>
-        <div className="flex gap-2">
+        <div>
           <select
             onChange={(e) => {
               if (e.target.value) loadQuoteDetails(Number(e.target.value));
             }}
-            className="bg-zinc-950 border border-zinc-800 text-zinc-150 text-xs rounded-lg px-3 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
+            className="form-input"
+            style={{ width: 'auto', minWidth: '240px', padding: '0.375rem 0.75rem', fontSize: '0.875rem' }}
           >
             <option value="">-- Choose Quote to Prefill --</option>
             {quotesList
@@ -361,63 +376,63 @@ function InvoiceBuilderForm() {
         </div>
       </div>
 
-      <form onSubmit={handleSaveInvoice} className="space-y-6">
+      <form onSubmit={handleSaveInvoice} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         
         {/* Step 1: Invoice metadata */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md space-y-4">
-          <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 pb-2 flex items-center gap-1.5">
-            <User size={14} className="text-violet-400" />
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <h2 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <User size={14} className="text-accent" />
             1. Invoice & Client Details
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
             {/* Title */}
-            <div className="form-group md:col-span-2">
-              <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">Invoice Title *</label>
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label className="form-label">Invoice Title *</label>
               <input
                 type="text"
                 placeholder="e.g. Website Development Milestone 1 Payment"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
                 required
               />
             </div>
 
             {/* Client Name */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">Client Company / Name *</label>
+              <label className="form-label">Client Company / Name *</label>
               <input
                 type="text"
                 placeholder="e.g. NovaTech Corp"
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
                 required
               />
             </div>
 
             {/* Client Email */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">Client Billing Email</label>
+              <label className="form-label">Client Billing Email</label>
               <input
                 type="email"
                 placeholder="e.g. accounts@client.com"
                 value={clientEmail}
                 onChange={(e) => setClientEmail(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
             {/* Lead relation */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">CRM Lead (Optional)</label>
+              <label className="form-label">CRM Lead (Optional)</label>
               <select
                 value={leadId}
                 onChange={(e) => setLeadId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
               >
                 <option value="">-- Unlinked --</option>
                 {leads.map((l) => (
@@ -428,11 +443,11 @@ function InvoiceBuilderForm() {
 
             {/* Currency */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">Billing Currency</label>
+              <label className="form-label">Billing Currency</label>
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
               >
                 <option value="INR">INR (₹)</option>
                 <option value="USD">USD ($)</option>
@@ -442,24 +457,24 @@ function InvoiceBuilderForm() {
 
             {/* Issue Date */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">Issue Date *</label>
+              <label className="form-label">Issue Date *</label>
               <input
                 type="date"
                 value={issueDate}
                 onChange={(e) => setIssueDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
                 required
               />
             </div>
 
             {/* Due Date */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">Due Date *</label>
+              <label className="form-label">Due Date *</label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
                 required
               />
             </div>
@@ -467,212 +482,271 @@ function InvoiceBuilderForm() {
         </div>
 
         {/* Step 2: Line items */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md space-y-4">
-          <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
-            <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-              <FileText size={14} className="text-violet-400" />
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+            <h2 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               2. Line Items Details
             </h2>
             <button
               type="button"
               onClick={addLineItem}
-              className="btn btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 hover:bg-zinc-850"
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
             >
               <Plus size={14} /> Add Item Row
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-zinc-800 text-zinc-500 font-bold uppercase tracking-wider">
-                  <th className="pb-2.5 pr-2.5 w-1/4">Catalog Service</th>
-                  <th className="pb-2.5 pr-2.5 w-1/3">Item Description</th>
-                  <th className="pb-2.5 pr-2.5 w-[8%] text-center">Qty</th>
-                  <th className="pb-2.5 pr-2.5 w-[14%]">Unit Price ({currency})</th>
-                  <th className="pb-2.5 pr-2.5 w-[8%] text-center">Discount %</th>
-                  <th className="pb-2.5 pr-2.5 w-[8%]">Tax Rate (GST)</th>
-                  <th className="pb-2.5 pr-2.5 w-[12%] text-right">Total Amount</th>
-                  <th className="pb-2.5 w-[4%] text-center"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/40">
-                {lineItems.map((item, index) => (
-                  <tr key={index} className="group align-top">
-                    {/* Service Selection */}
-                    <td className="py-3 pr-2.5">
-                      <select
-                        value={item.service_id}
-                        onChange={(e) => handleServiceChange(index, e.target.value ? Number(e.target.value) : '')}
-                        className="w-full bg-zinc-950 border border-zinc-850 text-zinc-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                      >
-                        <option value="">-- Custom Invoice Entry --</option>
-                        {services.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </td>
-
-                    {/* Description */}
-                    <td className="py-3 pr-2.5">
-                      <textarea
-                        rows={2}
-                        value={item.description}
-                        onChange={(e) => handleLineItemChange(index, 'description', e.target.value)}
-                        placeholder="Detailed deliverables description..."
-                        className="w-full bg-zinc-950 border border-zinc-850 text-zinc-300 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-violet-500 text-xs resize-none"
-                      />
-                    </td>
-
-                    {/* Quantity */}
-                    <td className="py-3 pr-2.5 text-center">
-                      <input
-                        type="number"
-                        min={1}
-                        value={item.quantity}
-                        onChange={(e) => handleLineItemChange(index, 'quantity', Number(e.target.value))}
-                        className="w-full bg-zinc-950 border border-zinc-850 text-zinc-200 text-center rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                        required
-                      />
-                    </td>
-
-                    {/* Unit Price */}
-                    <td className="py-3 pr-2.5">
-                      <input
-                        type="number"
-                        min={0}
-                        value={item.unit_price}
-                        onChange={(e) => handleLineItemChange(index, 'unit_price', Number(e.target.value))}
-                        placeholder="0"
-                        className="w-full bg-zinc-950 border border-zinc-850 text-zinc-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                        required
-                      />
-                    </td>
-
-                    {/* Discount % */}
-                    <td className="py-3 pr-2.5 text-center">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={item.discount_percentage}
-                        onChange={(e) => handleLineItemChange(index, 'discount_percentage', Number(e.target.value))}
-                        className="w-full bg-zinc-950 border border-zinc-850 text-zinc-200 text-center rounded-lg px-1 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                      />
-                    </td>
-
-                    {/* Tax Rate */}
-                    <td className="py-3 pr-2.5">
-                      <select
-                        value={item.tax_rate}
-                        onChange={(e) => handleLineItemChange(index, 'tax_rate', Number(e.target.value))}
-                        className="w-full bg-zinc-950 border border-zinc-850 text-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-violet-500"
-                      >
-                        <option value={0}>0%</option>
-                        <option value={5}>5%</option>
-                        <option value={12}>12%</option>
-                        <option value={18}>18%</option>
-                        <option value={28}>28%</option>
-                      </select>
-                    </td>
-
-                    {/* Total */}
-                    <td className="py-3 pr-2.5 text-right font-bold text-zinc-200 align-middle">
-                      {formatCurrency(rowCalculations[index]?.totalAmount || 0, currency)}
-                    </td>
-
-                    {/* Delete item */}
-                    <td className="py-3 align-middle text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeLineItem(index)}
-                        disabled={lineItems.length === 1}
-                        className="p-1.5 text-zinc-500 hover:text-red-400 disabled:opacity-30 disabled:hover:text-zinc-500 transition rounded"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+          <div className="data-table-wrap">
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ tableLayout: 'fixed', minWidth: '950px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '22%' }}>Catalog Service</th>
+                    <th style={{ width: '28%' }}>Item Description</th>
+                    <th style={{ width: '8%', textAlign: 'center' }}>Qty</th>
+                    <th style={{ width: '14%' }}>Unit Price ({currency})</th>
+                    <th style={{ width: '8%', textAlign: 'center' }}>Discount %</th>
+                    <th style={{ width: '10%' }}>Tax Rate (GST)</th>
+                    <th style={{ width: '12%', textAlign: 'right' }}>Total Amount</th>
+                    <th style={{ width: '4%' }}></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {lineItems.map((item, index) => (
+                    <tr key={index}>
+                      {/* Service Selection */}
+                      <td>
+                        <select
+                          value={item.service_id}
+                          onChange={(e) => handleServiceChange(index, e.target.value ? Number(e.target.value) : '')}
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem' }}
+                        >
+                          <option value="">-- Custom Invoice Entry --</option>
+                          {services.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* Description */}
+                      <td>
+                        <textarea
+                          rows={2}
+                          value={item.description}
+                          onChange={(e) => handleLineItemChange(index, 'description', e.target.value)}
+                          placeholder="Detailed deliverables description..."
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem', resize: 'none', lineHeight: 1.4 }}
+                        />
+                      </td>
+
+                      {/* Quantity */}
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.quantity ?? 1}
+                          onChange={(e) => handleLineItemChange(index, 'quantity', Number(e.target.value))}
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem', textAlign: 'center' }}
+                          required
+                        />
+                      </td>
+
+                      {/* Unit Price */}
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.unit_price ?? 0}
+                          onChange={(e) => handleLineItemChange(index, 'unit_price', Number(e.target.value))}
+                          placeholder="0"
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem' }}
+                          required
+                        />
+                      </td>
+
+                      {/* Discount % */}
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={item.discount_percentage ?? 0}
+                          onChange={(e) => handleLineItemChange(index, 'discount_percentage', Number(e.target.value))}
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem', textAlign: 'center' }}
+                        />
+                      </td>
+
+                      {/* Tax Rate */}
+                      <td>
+                        <select
+                          value={item.tax_rate ?? 18}
+                          onChange={(e) => handleLineItemChange(index, 'tax_rate', Number(e.target.value))}
+                          className="form-input"
+                          style={{ padding: '0.375rem 0.5rem', fontSize: '0.8125rem' }}
+                        >
+                          <option value={0}>0%</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
+                          <option value={18}>18%</option>
+                          <option value={28}>28%</option>
+                        </select>
+                      </td>
+
+                      {/* Total */}
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'middle' }}>
+                        {formatCurrency(rowCalculations[index]?.totalAmount || 0, currency)}
+                      </td>
+
+                      {/* Delete item */}
+                      <td style={{ verticalAlign: 'middle', textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => removeLineItem(index)}
+                          disabled={lineItems.length === 1}
+                          className="btn btn-danger btn-sm btn-icon"
+                          style={{ opacity: lineItems.length === 1 ? 0.3 : 1 }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
         {/* Step 3: Terms and Totals */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '1.5rem' }}>
           {/* Notes and Terms */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md space-y-4">
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 pb-2">3. Terms & Notes</h3>
+          <div style={{ flex: '2 1 600px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                3. Terms & Notes
+              </h3>
               
-              <div className="space-y-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-group">
-                  <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">Client Terms & Conditions</label>
+                  <label className="form-label">Client Terms & Conditions</label>
                   <textarea
                     rows={4}
                     value={terms}
                     onChange={(e) => setTerms(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 text-zinc-250 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500 resize-none font-mono leading-relaxed"
+                    className="form-input"
+                    style={{ resize: 'none', fontFamily: 'monospace', fontSize: '0.75rem', lineHeight: 1.5 }}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label className="text-xs font-semibold text-zinc-400 mb-1.5 block">Invoice Footer Notes</label>
+                  <label className="form-label">Invoice Footer Notes</label>
                   <textarea
                     rows={2}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500 resize-none font-mono"
+                    className="form-input"
+                    style={{ resize: 'none', fontFamily: 'monospace', fontSize: '0.75rem' }}
                   />
+                </div>
+
+                {/* Recurring Settings */}
+                <div className="form-group" style={{ marginTop: '0.5rem', padding: '1rem', border: '1px solid var(--border)', borderRadius: '0.375rem', backgroundColor: 'var(--bg-secondary)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, cursor: 'pointer', marginBottom: isRecurring ? '1rem' : 0, fontSize: '0.875rem' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isRecurring} 
+                      onChange={(e) => setIsRecurring(e.target.checked)} 
+                      style={{ accentColor: 'var(--accent)', width: '1rem', height: '1rem' }}
+                    />
+                    Make this a Recurring Invoice
+                  </label>
+                  
+                  {isRecurring && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Billing Interval</label>
+                        <select 
+                          value={recurringInterval} 
+                          onChange={(e) => setRecurringInterval(e.target.value as any)} 
+                          className="form-input"
+                        >
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">End Date (Optional)</label>
+                        <input 
+                          type="date" 
+                          value={recurringEndDate} 
+                          onChange={(e) => setRecurringEndDate(e.target.value)} 
+                          className="form-input"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
           {/* Totals panel */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md h-fit space-y-5">
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 pb-2">4. Summary Invoice Totals</h3>
+          <div style={{ flex: '1 1 300px' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: 'fit-content' }}>
+              <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                4. Summary Invoice Totals
+              </h3>
 
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-center text-zinc-400">
-                <span>Subtotal (Base)</span>
-                <span className="font-semibold text-zinc-200">{formatCurrency(subtotalSum, currency)}</span>
-              </div>
-              <div className="flex justify-between items-center text-zinc-400">
-                <span>Line Discounts</span>
-                <span className="font-semibold text-red-400">-{formatCurrency(itemsDiscountSum, currency)}</span>
-              </div>
-              <div className="flex justify-between items-center text-zinc-400 border-t border-zinc-800 pt-2.5">
-                <span>Taxable Value</span>
-                <span className="font-semibold text-zinc-200">{formatCurrency(subtotalSum - itemsDiscountSum, currency)}</span>
-              </div>
-              <div className="flex justify-between items-center text-zinc-400">
-                <span>GST Tax Total</span>
-                <span className="font-semibold text-zinc-200">{formatCurrency(taxSum, currency)}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.875rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                  <span>Subtotal (Base)</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatCurrency(subtotalSum, currency)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                  <span>Line Discounts</span>
+                  <span style={{ fontWeight: 600, color: 'var(--danger)' }}>-{formatCurrency(itemsDiscountSum, currency)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                  <span>Taxable Value</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatCurrency(subtotalSum - itemsDiscountSum, currency)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                  <span>GST Tax Total</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatCurrency(taxSum, currency)}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                  <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>Final Invoice Amount</span>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent)' }}>
+                    {formatCurrency(finalNetTotal, currency)}
+                  </span>
+                </div>
               </div>
 
-              <div className="flex justify-between items-center border-t border-zinc-800 pt-3 mt-2">
-                <span className="text-base font-bold text-zinc-250">Final Invoice Amount</span>
-                <span className="text-xl font-extrabold text-violet-400">
-                  {formatCurrency(finalNetTotal, currency)}
-                </span>
+              <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '0.75rem' }}
+                >
+                  Create & Send Invoice
+                </button>
+                <Link
+                  href="/invoices"
+                  className="btn btn-secondary"
+                  style={{ width: '100%', padding: '0.75rem', textAlign: 'center' }}
+                >
+                  Cancel
+                </Link>
               </div>
-            </div>
-
-            <div className="pt-4 border-t border-zinc-800 flex flex-col gap-2">
-              <button
-                type="submit"
-                className="w-full btn btn-primary py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5"
-              >
-                Create & Send Invoice
-              </button>
-              <Link
-                href="/invoices"
-                className="w-full btn btn-secondary py-2.5 font-semibold text-sm text-center block hover:bg-zinc-800"
-              >
-                Cancel
-              </Link>
             </div>
           </div>
         </div>
@@ -683,10 +757,11 @@ function InvoiceBuilderForm() {
 }
 
 export default function CreateInvoicePage() {
+  const { showToast } = useToast();
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center p-12 min-h-screen bg-zinc-950">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem', minHeight: '60vh' }}>
+        <div className="animate-pulse" style={{ color: 'var(--accent)', fontWeight: 600 }}>Loading Invoice Builder...</div>
       </div>
     }>
       <InvoiceBuilderForm />

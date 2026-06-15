@@ -92,7 +92,8 @@ class DepartmentController extends Controller
             'head:id,name,email,avatar_url',
             'members' => function ($query) {
                 $query->select('users.id', 'users.name', 'users.email', 'users.avatar_url', 'users.status')
-                      ->withPivot('role', 'is_primary', 'joined_at');
+                      ->withPivot('role', 'is_primary', 'joined_at')
+                      ->with('roles');
             },
         ]);
 
@@ -110,7 +111,11 @@ class DepartmentController extends Controller
                     'is_primary' => $member->pivot->is_primary,
                     'joined_at'  => $member->pivot->joined_at,
                 ],
-                'roles' => $member->getRoleNames(),
+                'roles' => $member->roles->map(fn($role) => [
+                    'id'           => $role->id,
+                    'name'         => $role->name,
+                    'display_name' => ucwords(str_replace('_', ' ', $role->name)),
+                ]),
             ];
         });
 

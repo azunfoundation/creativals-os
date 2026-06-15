@@ -4,15 +4,17 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X, Calendar, Clock, CheckSquare, MessageSquare,
-  Lock, Globe, Play, Plus, Check, ChevronRight, DollarSign, Trash, AlertCircle
+  Lock, Globe, Play, Plus, Check, ChevronRight, DollarSign, Trash, AlertCircle,
+  Paperclip, File, Download
 } from 'lucide-react';
 import {
   tasks as tasksApi,
   users as usersApi,
   timesheets as timesheetsApi,
-  Task, User, TaskComment, Timesheet, Subtask
+  Task, User, TaskComment, Timesheet, Subtask, TaskAttachment
 } from '@/lib/api';
 import { formatRelativeTime, formatDate } from '@/lib/utils';
+import { FileUpload } from '@/components/ui/FileUpload';
 
 interface TaskDetailSlideOverProps {
   open: boolean;
@@ -22,7 +24,7 @@ interface TaskDetailSlideOverProps {
 
 export default function TaskDetailSlideOver({ open, onClose, taskId }: TaskDetailSlideOverProps) {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'timelogs'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'timelogs' | 'attachments'>('details');
 
   // Form & Inline states
   const [editingTitle, setEditingTitle] = useState('');
@@ -89,6 +91,15 @@ export default function TaskDetailSlideOver({ open, onClose, taskId }: TaskDetai
     enabled: open && taskId !== null && activeTab === 'timelogs',
   });
 
+  const { data: attachments = [] } = useQuery<TaskAttachment[]>({
+    queryKey: ['taskAttachments', taskId],
+    queryFn: async () => {
+      const res = await tasksApi.listAttachments(taskId!);
+      return res.data;
+    },
+    enabled: open && taskId !== null,
+  });
+
   // Sync state when task is loaded
   useEffect(() => {
     if (task) {
@@ -144,6 +155,22 @@ export default function TaskDetailSlideOver({ open, onClose, taskId }: TaskDetai
       queryClient.invalidateQueries({ queryKey: ['taskTimeLogs', taskId] });
       queryClient.invalidateQueries({ queryKey: ['task', taskId] });
       queryClient.invalidateQueries({ queryKey: ['projectTimesheets'] });
+    },
+  });
+
+  const addAttachmentMutation = useMutation({
+    mutationFn: (data: { filename: string; file_path: string; file_size?: number; mime_type?: string }) =>
+      tasksApi.addAttachment(taskId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['taskAttachments', taskId] });
+    },
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: (attachmentId: number) =>
+      tasksApi.deleteAttachment(taskId!, attachmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['taskAttachments', taskId] });
     },
   });
 
@@ -467,6 +494,18 @@ export default function TaskDetailSlideOver({ open, onClose, taskId }: TaskDetai
                   >
                     Time Logs
                   </button>
+                  <button
+                    onClick={() => setActiveTab('attachments')}
+                    style={{
+                      paddingBottom: '0.5rem',
+                      color: activeTab === 'attachments' ? 'var(--accent)' : 'var(--text-secondary)',
+                      borderBottom: activeTab === 'attachments' ? '2px solid var(--accent)' : '2px solid transparent',
+                      fontWeight: 600,
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    Attachments ({attachments.length})
+                  </button>
                 </div>
 
                 {/* Tab content: Details & Subtasks */}
@@ -710,6 +749,120 @@ export default function TaskDetailSlideOver({ open, onClose, taskId }: TaskDetai
                       {timeLogs.length === 0 && (
                         <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                           No hours logged on this task yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab content: Attachments */}
+                {activeTab === 'attachments' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600 }}>Task Attachments</h4>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        Attached documents, briefs, and files for this task.
+                      </p>
+                    </div>
+
+                    <FileUpload
+                      type="attachment"
+                      onUploadComplete={(res) => {
+                        addAttachmentMutation.mutate({
+                          filename: res.filename,
+                          file_path: res.file_path,
+                          file_size: res.file_size,
+                          mime_type: res.mime_type,
+                        });
+                      }}
+                    />
+
+                    {/* Attachments List */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      {attachments.map((att) => (
+                        <div
+                          key={att.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.75rem',
+                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--surface-elevated)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                            <div style={{
+                              width: 36, height: 36, borderRadius: 'var(--radius-sm)',
+                              background: 'var(--surface)', display: 'flex',
+                              alignItems: 'center', justifyContent: 'center',
+                              color: 'var(--text-secondary)', flexShrink: 0
+                            }}>
+                              <File size={16} />
+                            </div>
+                            <div style={{ overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  fontSize: '0.8125rem',
+                                  fontWeight: 600,
+                                  color: 'var(--text-primary)',
+                                  textOverflow: 'ellipsis',
+                                  overflow: 'hidden',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title={att.filename}
+                              >
+                                {att.filename}
+                              </div>
+                              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'flex', gap: '0.5rem', marginTop: '2px' }}>
+                                <span>{(att.file_size / 1024).toFixed(0)} KB</span>
+                                <span>•</span>
+                                <span>{att.uploader?.name || 'Uploader'}</span>
+                                <span>•</span>
+                                <span>{formatDate(att.created_at)}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.375rem' }}>
+                            <a
+                              href={att.file_path && att.file_path.startsWith('http') ? att.file_path : `${process.env.NEXT_PUBLIC_STORAGE_URL || 'http://localhost:8000/storage'}/${att.file_path}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                width: 28, height: 28, display: 'flex',
+                                alignItems: 'center', justifyContent: 'center',
+                                color: 'var(--text-secondary)', borderRadius: 'var(--radius-sm)',
+                                background: 'var(--surface)', border: '1px solid var(--border)',
+                              }}
+                              className="hover:text-primary"
+                              title="Download File"
+                            >
+                              <Download size={14} />
+                            </a>
+                            <button
+                              onClick={() => deleteAttachmentMutation.mutate(att.id)}
+                              disabled={deleteAttachmentMutation.isPending}
+                              style={{
+                                width: 28, height: 28, display: 'flex',
+                                alignItems: 'center', justifyContent: 'center',
+                                color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)',
+                                background: 'var(--surface)', border: '1px solid var(--border)',
+                                cursor: 'pointer',
+                              }}
+                              className="hover:text-danger"
+                              title="Delete Attachment"
+                            >
+                              <Trash size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {attachments.length === 0 && (
+                        <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
+                          No files attached to this task.
                         </div>
                       )}
                     </div>

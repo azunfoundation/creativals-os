@@ -1,6 +1,7 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect } from 'react'; 
+import { useToast } from '@/hooks/useToast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, Star, Phone, MessageSquareCode, Mail, FileText, 
@@ -94,6 +95,7 @@ const ACTIVITY_CONFIG = {
 // ============================================================
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { showToast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
   
@@ -126,7 +128,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     queryFn: async () => {
       try {
         const res = await leadsApi.get(leadId);
-        return res.data;
+        // Axios interceptor unwraps {data: {...}} → res.data for non-paginated
+        const d = (res as any).data;
+        return d ?? makeMockLead(leadId);
       } catch {
         return makeMockLead(leadId);
       }
@@ -138,7 +142,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     queryFn: async () => {
       try {
         const res = await usersApi.list({ per_page: 100 });
-        return res.data.data;
+        return (res as any).data?.data ?? (res as any).data ?? MOCK_USERS;
       } catch {
         return MOCK_USERS;
       }
@@ -150,7 +154,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     queryFn: async () => {
       try {
         const res = await stagesApi.list();
-        return res.data;
+        const d = (res as any).data;
+        return Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : []);
       } catch {
         return [];
       }
@@ -192,8 +197,19 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     mutationFn: (data: any) => leadsApi.convert(leadId, data),
     onSuccess: (res) => {
       setShowConvertModal(false);
-      // Redirect to builder page
-      router.push(`/quotes/builder?lead_id=${leadId}&quote_id=${res.data.quote_id}`);
+      // The API returns {message, quote_id, quote_number}
+      // Axios interceptor unwraps .data.data when present; for non-envelope responses it leaves as-is
+      const payload = (res as any).data;
+      const quoteId = payload?.quote_id ?? payload?.data?.quote_id;
+      if (quoteId) {
+        router.push(`/quotes/${quoteId}`);
+      } else {
+        router.push('/quotes');
+      }
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to convert lead. Please try again.';
+      showToast(`Error: ${msg}`, 'info');
     }
   });
 
@@ -247,7 +263,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
   const handleDeleteContact = (contactId: number) => {
     if (lead.contacts.length <= 1) {
-      alert('Must have at least one contact.');
+      showToast('Must have at least one contact.', 'info');
       return;
     }
     const updatedContacts = lead.contacts.filter((c) => c.id !== contactId);
@@ -412,7 +428,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Monthly Budget</div>
                 <span style={{ fontSize: '0.9375rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'monospace' }}>
-                  {formatCurrency(lead.budget)}
+                  {formatCurrency(Number((lead as any).estimated_monthly_budget ?? (lead as any).budget ?? 0) || 0)}
                 </span>
               </div>
 
@@ -973,7 +989,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               onSubmit={(e) => {
                 e.preventDefault();
                 convertLeadMutation.mutate({
-                  quote_name: quoteName,
+                  // Backend expects 'quote_title', not 'quote_name'
+                  quote_title: quoteName,
                   valid_until: quoteValidity
                 });
               }}

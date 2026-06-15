@@ -1,6 +1,9 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -19,7 +22,12 @@ import {
   Building,
   User as UserIcon,
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  Mail,
+  Loader2,
+  Check,
+  X,
+  Minus
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatRelativeTime } from '@/lib/utils';
 
@@ -107,7 +115,19 @@ interface Params {
   id: string;
 }
 
+// ── Safe currency code resolver ──────────────────────────────────
+// The API may return currency as a string ('INR') or as an object {id, code, symbol, name}
+function resolveCurrencyCode(currency: any): string {
+  if (!currency) return 'INR';
+  if (typeof currency === 'string') return currency;
+  if (typeof currency === 'object') {
+    return currency.code ?? currency.currency_code ?? currency.symbol ?? 'INR';
+  }
+  return 'INR';
+}
+
 export default function QuoteDetailPage({ params }: { params: Promise<Params> }) {
+  const { showToast } = useToast();
   const resolvedParams = use(params);
   const quoteId = Number(resolvedParams.id);
 
@@ -119,6 +139,27 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [approvalActionType, setApprovalActionType] = useState<'approve' | 'reject'>('approve');
   const [commentsText, setCommentsText] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleEmailClient = async () => {
+    if (!quote) return;
+    setSendingEmail(true);
+    setEmailStatus(null);
+    try {
+      await quotesApi.send(quote.id);
+      setEmailStatus({ type: 'success', message: 'Quote proposal sent to client successfully.' });
+      setTimeout(() => setEmailStatus(null), 5000);
+    } catch (err: any) {
+      setEmailStatus({ 
+        type: 'error', 
+        message: err.response?.data?.message || 'Failed to email quote. Please check SMTP settings.' 
+      });
+      setTimeout(() => setEmailStatus(null), 7000);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   // Fetch quote detail
   const { data: quote, isLoading } = useQuery<Quote>({
@@ -142,7 +183,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
     mutationFn: () => quotesApi.submitApproval(quoteId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quote-detail', quoteId] });
-      alert('Quote submitted for internal review.');
+      showToast('Quote submitted for internal review.', 'info');
     },
     onError: () => {
       // Fallback
@@ -249,8 +290,24 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
     window.print();
   };
 
-  const handleMockDownload = () => {
-    alert(`Generating PDF layout for ${quote.quote_number}... Mock PDF download triggered.`);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const handleDownloadPdf = async () => {
+    if (!quote) return;
+    setDownloadingPdf(true);
+    try {
+      const res = await quotesApi.downloadPdf(quote.id);
+      const url = window.URL.createObjectURL(new Blob([res.data as any]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${quote.quote_number || 'quote'}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      showToast('Failed to download PDF', 'info');
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   const openApprovalModal = (type: 'approve' | 'reject') => {
@@ -264,7 +321,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
       approveMutation.mutate(commentsText);
     } else {
       if (!commentsText.trim()) {
-        alert('Please specify the rejection reasons in comments.');
+        showToast('Please specify the rejection reasons in comments.', 'info');
         return;
       }
       rejectMutation.mutate(commentsText);
@@ -342,19 +399,43 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
 
         <div className="flex gap-2">
           <button
+            onClick={handleEmailClient}
+            disabled={sendingEmail}
+            className="btn btn-primary flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2"
+          >
+            {sendingEmail ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+            <span>Email to Client</span>
+          </button>
+          <button
             onClick={handlePrint}
             className="btn btn-secondary flex items-center gap-1.5 text-xs font-semibold hover:bg-zinc-800 px-3.5 py-2"
           >
             <Printer size={14} /> Print
           </button>
           <button
-            onClick={handleMockDownload}
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
             className="btn btn-secondary flex items-center gap-1.5 text-xs font-semibold hover:bg-zinc-800 px-3.5 py-2"
           >
-            <Download size={14} /> Mock Download
+            {downloadingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Download PDF
           </button>
         </div>
       </div>
+
+      {emailStatus && (
+        <div style={{
+          padding: '0.875rem 1.25rem',
+          background: emailStatus.type === 'success' ? 'var(--success-subtle)' : 'var(--danger-subtle)',
+          color: emailStatus.type === 'success' ? 'var(--success)' : 'var(--danger)',
+          border: emailStatus.type === 'success' ? '1px solid var(--success)' : '1px solid var(--danger)',
+          borderRadius: 'var(--radius-md)',
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          marginBottom: '1rem',
+        }}>
+          {emailStatus.message}
+        </div>
+      )}
 
       {/* Grid columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -388,7 +469,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
                 <div className="text-xs text-zinc-400 space-y-0.5">
                   <p><strong>Quote Date:</strong> {formatDate(quote.created_at || new Date())}</p>
                   <p><strong>Valid Until:</strong> {formatDate(quote.valid_until)}</p>
-                  <p><strong>Currency:</strong> {quote.currency}</p>
+                  <p><strong>Currency:</strong> {resolveCurrencyCode(quote.currency)}</p>
                 </div>
               </div>
             </div>
@@ -463,9 +544,9 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
                             <span className="text-[10px] text-zinc-400 block mt-1 leading-relaxed whitespace-pre-wrap">{item.description}</span>
                           </td>
                           <td className="p-3.5 text-center font-mono">{item.quantity}</td>
-                          <td className="p-3.5 text-right font-mono">{formatCurrency(item.unit_price, quote.currency)}</td>
+                          <td className="p-3.5 text-right font-mono">{formatCurrency(item.unit_price, resolveCurrencyCode(quote.currency))}</td>
                           <td className="p-3.5 text-center text-red-400 font-semibold font-mono">{item.discount_percentage > 0 ? `${item.discount_percentage}%` : '-'}</td>
-                          <td className="p-3.5 text-right font-bold font-mono text-zinc-200">{formatCurrency(itemTotal, quote.currency)}</td>
+                          <td className="p-3.5 text-right font-bold font-mono text-zinc-200">{formatCurrency(itemTotal, resolveCurrencyCode(quote.currency))}</td>
                         </tr>
                       );
                     })}
@@ -490,15 +571,15 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
                 <div className="bg-zinc-950/50 rounded-xl border border-zinc-850 p-4 space-y-2 text-[11px] font-medium text-zinc-400">
                   <div className="flex justify-between items-center">
                     <span>Subtotal:</span>
-                    <span className="font-semibold text-zinc-200">{formatCurrency(quote.subtotal, quote.currency)}</span>
+                    <span className="font-semibold text-zinc-200">{formatCurrency(quote.subtotal, resolveCurrencyCode(quote.currency))}</span>
                   </div>
                   <div className="flex justify-between items-center text-red-400">
                     <span>Discount:</span>
-                    <span>-{formatCurrency(quote.discount_amount, quote.currency)}</span>
+                    <span>-{formatCurrency(quote.discount_amount, resolveCurrencyCode(quote.currency))}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span>GST Tax:</span>
-                    <span className="font-semibold text-zinc-200">{formatCurrency(quote.tax_amount, quote.currency)}</span>
+                    <span className="font-semibold text-zinc-200">{formatCurrency(quote.tax_amount, resolveCurrencyCode(quote.currency))}</span>
                   </div>
                   {quote.coupon_code && (
                     <div className="flex justify-between items-center text-violet-400 font-bold border-t border-dashed border-zinc-800 pt-1.5 mt-1">
@@ -508,7 +589,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
                   )}
                   <div className="flex justify-between items-center border-t border-zinc-800 pt-2 mt-1.5 text-xs">
                     <span className="font-bold text-zinc-300">Total Net:</span>
-                    <span className="font-extrabold text-violet-400 text-sm">{formatCurrency(quote.total_amount, quote.currency)}</span>
+                    <span className="font-extrabold text-violet-400 text-sm">{formatCurrency(quote.total_amount, resolveCurrencyCode(quote.currency))}</span>
                   </div>
                 </div>
               </div>
@@ -613,12 +694,12 @@ export default function QuoteDetailPage({ params }: { params: Promise<Params> })
                   return (
                     <div key={log.id} className="flex gap-3 relative">
                       {/* Timeline dot */}
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold z-10 ${
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center z-10 ${
                         isLogApproved ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' :
                         isLogRejected ? 'bg-red-950 text-red-400 border border-red-900' :
                         'bg-zinc-850 text-zinc-400 border border-zinc-800'
                       }`}>
-                        {isLogApproved ? '✓' : isLogRejected ? '✕' : '•'}
+                        {isLogApproved ? <Check size={12} strokeWidth={2.5} /> : isLogRejected ? <X size={12} strokeWidth={2.5} /> : <Minus size={12} />}
                       </div>
                       
                       <div className="flex-1 min-w-0">

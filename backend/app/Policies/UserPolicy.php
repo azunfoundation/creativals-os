@@ -52,6 +52,10 @@ class UserPolicy
      */
     public function update(User $authUser, User $user): bool
     {
+        if ($authUser->id === $user->id) {
+            return true;
+        }
+
         return $authUser->hasPermissionTo('users.edit');
     }
 

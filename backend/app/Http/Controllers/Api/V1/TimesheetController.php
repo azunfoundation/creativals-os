@@ -8,10 +8,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\TimesheetResource;
 use App\Models\Project;
 use App\Models\Timesheet;
+use App\Models\NotificationPreference;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\TimesheetSubmittedMail;
 
 class TimesheetController extends Controller
 {
@@ -179,6 +183,36 @@ class TimesheetController extends Controller
         });
 
         $timesheet->load(['user', 'task', 'project']);
+
+        $approver = null;
+        if ($timesheet->user) {
+            $approver = $timesheet->user->managers()->wherePivot('is_primary', true)->first() 
+                ?? $timesheet->user->managers()->first();
+        }
+        if (!$approver && $timesheet->project) {
+            $pm = $timesheet->project->members()->where('role', 'manager')->first()
+                ?? User::where('email', 'founder@creativals.com')->first();
+            if ($pm) {
+                $approver = $pm;
+            }
+        }
+        if (!$approver) {
+            $approver = User::where('email', 'founder@creativals.com')->first();
+        }
+
+        if ($approver && $approver->email) {
+            $pref = NotificationPreference::where('user_id', $approver->id)
+                ->where('event_type', 'timesheet_submitted')
+                ->first();
+            if ($pref && $pref->email) {
+                try {
+                    Mail::to($approver->email)->send(new TimesheetSubmittedMail($timesheet));
+                } catch (\Throwable $e) {
+                    // Ignore mail failures
+                }
+            }
+        }
+
         return (new TimesheetResource($timesheet))->response();
     }
 

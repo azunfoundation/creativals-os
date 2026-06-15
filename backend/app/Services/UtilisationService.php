@@ -18,13 +18,15 @@ class UtilisationService
      * @param Carbon $to
      * @return array
      */
-    public function calculateForUser(User $user, Carbon $from, Carbon $to): array
+    public function calculateForUser(User $user, Carbon $from, Carbon $to, $preFetchedTimesheets = null): array
     {
         // ── 1. Logged Hours ───────────────────────────────────────────────────
-        $timesheets = $user->timesheets()
-            ->whereIn('status', ['submitted', 'approved'])
-            ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
-            ->get();
+        $timesheets = $preFetchedTimesheets !== null
+            ? $preFetchedTimesheets
+            : $user->timesheets()
+                ->whereIn('status', ['submitted', 'approved'])
+                ->whereBetween('date', [$from->toDateString(), $to->toDateString()])
+                ->get();
 
         $loggedHours = 0.0;
         $billableHours = 0.0;

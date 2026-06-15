@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -63,7 +63,9 @@ export default function SalesPipelineReport() {
       key: 'conversion_rate_pct',
       label: 'Conversion Rate',
       align: 'right' as const,
-      render: (val: any) => <span className="font-mono font-semibold text-emerald-400">{val}%</span>,
+      render: (val: any) => (
+        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--success)' }}>{val}%</span>
+      ),
     },
   ];
 
@@ -75,13 +77,17 @@ export default function SalesPipelineReport() {
       key: 'total_pipeline_value',
       label: 'Active Pipeline Value',
       align: 'right' as const,
-      render: (val: any) => <span className="font-mono">{formatCurrency(Number(val))}</span>,
+      render: (val: any) => (
+        <span style={{ fontFamily: 'monospace' }}>{formatCurrency(Number(val))}</span>
+      ),
     },
     {
       key: 'conversion_rate_pct',
       label: 'Conversion Rate',
       align: 'right' as const,
-      render: (val: any) => <span className="font-mono text-emerald-400">{val}%</span>,
+      render: (val: any) => (
+        <span style={{ fontFamily: 'monospace', color: 'var(--success)' }}>{val}%</span>
+      ),
     },
   ];
 
@@ -97,64 +103,82 @@ export default function SalesPipelineReport() {
       error={error ? (error as any).message : null}
     >
       {/* Date Type Filter (created vs converted date type) */}
-      <div className="flex bg-slate-950/60 p-1 border border-slate-800/80 rounded-lg max-w-sm">
+      <div style={{ display: 'flex', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '4px', maxWidth: '380px', marginBottom: '1rem' }}>
         <button
           onClick={() => setDateType('created')}
-          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition cursor-pointer ${
-            dateType === 'created' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-          }`}
+          style={{
+            flex: 1,
+            padding: '0.375rem 0.75rem',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            borderRadius: 'var(--radius-sm)',
+            cursor: 'pointer',
+            background: dateType === 'created' ? 'var(--accent)' : 'transparent',
+            color: dateType === 'created' ? '#ffffff' : 'var(--text-secondary)',
+            transition: 'all var(--transition-fast)',
+            border: 'none',
+          }}
         >
           By Lead Created Date
         </button>
         <button
           onClick={() => setDateType('converted')}
-          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition cursor-pointer ${
-            dateType === 'converted' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-          }`}
+          style={{
+            flex: 1,
+            padding: '0.375rem 0.75rem',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            borderRadius: 'var(--radius-sm)',
+            cursor: 'pointer',
+            background: dateType === 'converted' ? 'var(--accent)' : 'transparent',
+            color: dateType === 'converted' ? '#ffffff' : 'var(--text-secondary)',
+            transition: 'all var(--transition-fast)',
+            border: 'none',
+          }}
         >
           By Lead Converted Date
         </button>
       </div>
 
       {data && (
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
             <KpiCard
               title="Leads In Scope"
               value={data.summary.total_leads}
               subtext={`Based on ${dateType} date`}
-              icon={<Users className="w-5 h-5" />}
+              icon={<Users size={18} />}
             />
             <KpiCard
               title="Converted Leads"
               value={data.summary.converted_leads}
               subtext="Successfully Won"
-              icon={<UserCheck className="w-5 h-5 text-emerald-400" />}
+              icon={<UserCheck size={18} />}
             />
             <KpiCard
               title="Conversion Rate"
               value={`${data.summary.conversion_rate_pct}%`}
               subtext="Win Ratio in Period"
-              icon={<Sparkles className="w-5 h-5 text-amber-400" />}
+              icon={<Sparkles size={18} />}
             />
             <KpiCard
               title="Avg Budget"
               value={formatCurrency(data.summary.avg_budget)}
               subtext="Estimated Monthly Budget"
-              icon={<PieChart className="w-5 h-5" />}
+              icon={<PieChart size={18} />}
             />
             <KpiCard
               title="Active Pipeline Value"
               value={formatCurrency(data.summary.total_pipeline_value)}
               subtext="Expected Monthly Revenue"
-              icon={<Flame className="w-5 h-5 text-rose-400" />}
+              icon={<Flame size={18} />}
             />
           </div>
 
           {/* Leads by Stage Chart */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Leads by Deal Stage</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Leads by Deal Stage</h3>
             <BarChart
               data={data.by_stage}
               xKey="stage_name"
@@ -163,16 +187,16 @@ export default function SalesPipelineReport() {
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.5rem' }}>
             {/* Sources Table */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Acquisition Channels Performance</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Acquisition Channels Performance</h3>
               <ReportTable columns={sourceColumns} data={data.by_source} />
             </div>
 
             {/* Executives Table */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Sales Executives Performance</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Sales Executives Performance</h3>
               <ReportTable columns={execColumns} data={data.by_exec} />
             </div>
           </div>

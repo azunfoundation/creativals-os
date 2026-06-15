@@ -1,6 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider'; 
+import { useToast } from '@/hooks/useToast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar as CalendarIcon, Clock, ChevronLeft, ChevronRight,
@@ -123,6 +127,8 @@ const MOCK_TIMESHEETS: Timesheet[] = [
 ];
 
 export default function TimesheetsPage() {
+  const { confirm, prompt } = useModal();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   // Layout states
@@ -184,16 +190,18 @@ export default function TimesheetsPage() {
   // Queries
   // ============================================================
 
-  const { data: timesheetsData = [] } = useQuery<Timesheet[]>({
+  const { data: timesheetsData = [], isLoading } = useQuery<Timesheet[]>({
     queryKey: ['timesheets'],
     queryFn: async () => {
       try {
         const res = await timesheetsApi.list();
         const payload = res.data as any;
-        if (payload && Array.isArray(payload.data)) {
-          return payload.data;
-        }
-        return Array.isArray(payload) ? payload : [];
+        const rawData = payload && Array.isArray(payload.data) ? payload.data : (Array.isArray(payload) ? payload : []);
+        return rawData.map((t: any) => ({
+          ...t,
+          hours: parseFloat(t.hours_logged) || parseFloat(t.hours) || 0,
+          billable: t.is_billable !== undefined ? !!t.is_billable : (t.billable !== undefined ? !!t.billable : true)
+        }));
       } catch {
         return MOCK_TIMESHEETS;
       }
@@ -276,7 +284,7 @@ export default function TimesheetsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['timesheets'] });
-      alert('Timesheets submitted for approval successfully.');
+      showToast('Timesheets submitted for approval successfully.', 'info');
     }
   });
 
@@ -389,17 +397,17 @@ export default function TimesheetsPage() {
     }
   };
 
-  const handleWeeklySubmit = () => {
+  const handleWeeklySubmit = async () => {
     const draftIds = currentWeekTimesheets
       .filter(t => t.status === 'draft')
       .map(t => t.id);
 
     if (draftIds.length === 0) {
-      alert('No draft timesheet entries found for this week.');
+      showToast('No draft timesheet entries found for this week.', 'info');
       return;
     }
 
-    if (confirm(`Submit ${draftIds.length} draft entries for approval?`)) {
+    if (await confirm({ message: `Submit ${draftIds.length} draft entries for approval?`, variant: 'danger' })) {
       submitWeekMutation.mutate(draftIds);
     }
   };
@@ -438,11 +446,12 @@ export default function TimesheetsPage() {
     let nonBillable = 0;
 
     currentWeekTimesheets.forEach(t => {
-      total += t.hours;
+      const val = parseFloat(t.hours as any) || 0;
+      total += val;
       if (t.billable) {
-        billable += t.hours;
+        billable += val;
       } else {
-        nonBillable += t.hours;
+        nonBillable += val;
       }
     });
 
@@ -474,7 +483,7 @@ export default function TimesheetsPage() {
                 borderRadius: 'var(--radius-sm)'
               }}
             >
-              <Grid size={14} style={{ marginRight: '4px' }} />
+              <Grid size={14} />
               Weekly Grid
             </button>
             <button
@@ -487,7 +496,7 @@ export default function TimesheetsPage() {
                 borderRadius: 'var(--radius-sm)'
               }}
             >
-              <List size={14} style={{ marginRight: '4px' }} />
+              <List size={14} />
               List View
             </button>
           </div>
@@ -550,7 +559,7 @@ export default function TimesheetsPage() {
           <button
             onClick={handleWeeklySubmit}
             className="btn btn-primary btn-sm"
-            style={{ height: '32px', display: 'flex', alignItems: 'center', gap: '4px' }}
+            style={{ height: '32px' }}
           >
             <Send size={13} />
             Submit Week for Approval
@@ -608,7 +617,7 @@ export default function TimesheetsPage() {
                       {weekDays.map((day, colIdx) => {
                         const dateStr = formatLocalDateStr(day);
                         const entries = row.entries[dateStr] || [];
-                        const sumHrs = entries.reduce((s, e) => s + e.hours, 0);
+                        const sumHrs = entries.reduce((s, e) => s + (parseFloat(e.hours as any) || 0), 0);
                         rowTotal += sumHrs;
 
                         // Check if today column
@@ -742,6 +751,13 @@ export default function TimesheetsPage() {
             </div>
 
             {/* List Table */}
+            {isLoading ? (
+              <div className="data-table-wrap">
+                <SkeletonTable rows={5} cols={8} />
+              </div>
+            ) : filteredTimesheetsList.length === 0 ? (
+              <EmptyState title="No timesheets found" description="No timesheet logs found matching the selected filters." />
+            ) : (
             <div className="data-table-wrap">
               <table className="data-table">
                 <thead>
@@ -802,7 +818,7 @@ export default function TimesheetsPage() {
                                 <button onClick={() => handleEditButton(entry)} style={{ padding: '4px', color: 'var(--text-secondary)' }} className="hover:text-primary">
                                   <Edit2 size={13} />
                                 </button>
-                                <button onClick={() => { if (confirm('Delete timesheet entry?')) deleteTimesheetMutation.mutate(entry.id); }} style={{ padding: '4px', color: 'var(--text-muted)' }} className="hover:text-danger">
+                                <button onClick={async () => { if (await confirm({ message: 'Delete timesheet entry?', variant: 'danger' })) deleteTimesheetMutation.mutate(entry.id); }} style={{ padding: '4px', color: 'var(--text-muted)' }} className="hover:text-danger">
                                   <Trash2 size={13} />
                                 </button>
                               </>
@@ -812,17 +828,10 @@ export default function TimesheetsPage() {
                       </tr>
                     );
                   })}
-
-                  {filteredTimesheetsList.length === 0 && (
-                    <tr>
-                      <td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                        No timesheet logs found matching the selected filters.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
+            )}
 
           </div>
         )}
@@ -976,7 +985,7 @@ export default function TimesheetsPage() {
                 {editingTimesheetId && (
                   <button
                     type="button"
-                    onClick={() => { if (confirm('Are you sure you want to delete this entry?')) { deleteTimesheetMutation.mutate(editingTimesheetId); setShowLogModal(false); } }}
+                    onClick={async () => { if (await confirm({ message: 'Are you sure you want to delete this entry?', variant: 'danger' })) { deleteTimesheetMutation.mutate(editingTimesheetId); setShowLogModal(false); } }}
                     className="btn btn-danger"
                     style={{ marginRight: 'auto' }}
                   >

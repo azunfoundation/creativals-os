@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Building2, Coins, Percent, Save, Loader2, 
-  Globe, Mail, Phone, MapPin, Clock, AlertCircle
+  Globe, Mail, Phone, MapPin, Clock, AlertCircle, Calendar
 } from 'lucide-react';
 import { platformSettings as settingsApi, SystemSettings } from '@/lib/api';
+import { FileUpload } from '@/components/ui/FileUpload';
 
 const MOCK_SETTINGS: SystemSettings = {
   company: {
@@ -15,6 +16,8 @@ const MOCK_SETTINGS: SystemSettings = {
     company_phone: '+91 98765 43210',
     company_address: 'No 45, Residency Road, Bangalore - 560025',
     timezone: 'Asia/Kolkata',
+    date_format: 'DD/MM/YYYY',
+    logo_url: null,
   },
   tax: {
     default_tax_rate: 18.00,
@@ -50,6 +53,9 @@ export default function GeneralSettingsPage() {
   const [companyPhone, setCompanyPhone] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
   const [timezone, setTimezone] = useState('UTC');
+  const [dateFormat, setDateFormat] = useState('DD/MM/YYYY');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [logoImageError, setLogoImageError] = useState(false);
 
   const [taxRate, setTaxRate] = useState('0');
 
@@ -77,6 +83,9 @@ export default function GeneralSettingsPage() {
       setCompanyPhone(settings.company.company_phone);
       setCompanyAddress(settings.company.company_address);
       setTimezone(settings.company.timezone);
+      setDateFormat(settings.company.date_format || 'DD/MM/YYYY');
+      setLogoUrl(settings.company.logo_url || '');
+      setLogoImageError(false);
 
       setTaxRate(settings.tax.default_tax_rate.toString());
 
@@ -87,6 +96,10 @@ export default function GeneralSettingsPage() {
       setActiveCurrencies(actives);
     }
   }, [settings]);
+
+  useEffect(() => {
+    setLogoImageError(false);
+  }, [logoUrl]);
 
   // Mutations
   const updateCompanyMutation = useMutation({
@@ -143,6 +156,8 @@ export default function GeneralSettingsPage() {
       company_phone: companyPhone,
       company_address: companyAddress,
       timezone: timezone,
+      date_format: dateFormat,
+      logo_url: logoUrl,
     });
   };
 
@@ -218,7 +233,7 @@ export default function GeneralSettingsPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gap: '1.5rem' }} className="grid grid-cols-1 lg:grid-cols-2">
+      <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))' }}>
         
         {/* ============================================================
             COLUMN 1: COMPANY PROFILE CARD
@@ -231,6 +246,34 @@ export default function GeneralSettingsPage() {
           
           <form onSubmit={handleCompanySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             
+            {/* Logo Preview & Upload */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '1rem', background: 'var(--surface-elevated)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', marginBottom: '0.5rem' }}>
+              <div style={{ width: 64, height: 64, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                {logoUrl && !logoImageError ? (
+                  <img 
+                    src={logoUrl} 
+                    alt="Company Logo" 
+                    onError={() => setLogoImageError(true)} 
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                  />
+                ) : (
+                  <Building2 size={24} style={{ color: 'var(--text-muted)' }} />
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Company Logo</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', marginBottom: '0.75rem' }}>
+                  Upload a logo image (max 2MB, transparent background recommended).
+                </div>
+                <FileUpload
+                  type="logo"
+                  onUploadComplete={(res) => {
+                    setLogoUrl(res.url);
+                  }}
+                />
+              </div>
+            </div>
+
             <div className="form-group">
               <label className="form-label">Company Name *</label>
               <input
@@ -291,20 +334,40 @@ export default function GeneralSettingsPage() {
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Default System Timezone *</label>
-              <div style={{ position: 'relative' }}>
-                <Clock size={14} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="form-input"
-                  style={{ paddingLeft: '2.25rem' }}
-                >
-                  {COMMON_TIMEZONES.map(tz => (
-                    <option key={tz} value={tz}>{tz}</option>
-                  ))}
-                </select>
+            <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr' }}>
+              <div className="form-group">
+                <label className="form-label">Default System Timezone *</label>
+                <div style={{ position: 'relative' }}>
+                  <Clock size={14} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="form-input"
+                    style={{ paddingLeft: '2.25rem' }}
+                  >
+                    {COMMON_TIMEZONES.map(tz => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Date Format *</label>
+                <div style={{ position: 'relative' }}>
+                  <Calendar size={14} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <select
+                    value={dateFormat}
+                    onChange={(e) => setDateFormat(e.target.value)}
+                    className="form-input"
+                    style={{ paddingLeft: '2.25rem' }}
+                  >
+                    <option value="DD/MM/YYYY">DD/MM/YYYY (31/12/2026)</option>
+                    <option value="MM/DD/YYYY">MM/DD/YYYY (12/31/2026)</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD (2026-12-31)</option>
+                    <option value="DD MMM YYYY">DD MMM YYYY (31 Dec 2026)</option>
+                  </select>
+                </div>
               </div>
             </div>
 

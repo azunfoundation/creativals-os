@@ -110,9 +110,9 @@ export default function ExpenseBreakdownReport() {
       error={error ? (error as any).message : null}
     >
       {data && (
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
             <KpiCard
               title="Total Submitted"
               value={formatCurrency(data.summary.total_submitted)}
@@ -146,8 +146,8 @@ export default function ExpenseBreakdownReport() {
           </div>
 
           {/* Line Chart Trend */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Expense Trend (INR)</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Expense Trend (INR)</h3>
             <LineChart
               data={data.trend}
               xKey="month_key"
@@ -155,7 +155,7 @@ export default function ExpenseBreakdownReport() {
               secondaryYKey="submitted_amount"
               valueFormatter={(val) => formatCurrency(val)}
             />
-            <div className="flex gap-4 text-xs text-slate-500 justify-end px-4">
+            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: 'var(--text-muted)', justifyContent: 'flex-end', padding: '0 1rem' }}>
               <span className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Approved
               </span>
@@ -166,22 +166,22 @@ export default function ExpenseBreakdownReport() {
           </div>
 
           {/* Breakdown Tables Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
             {/* Categories */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">By Category</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>By Category</h3>
               <ReportTable columns={catColumns} data={data.by_category} pageSize={5} />
             </div>
 
             {/* Vendors */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">By Vendor</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>By Vendor</h3>
               <ReportTable columns={vendorColumns} data={data.by_vendor} pageSize={5} />
             </div>
 
             {/* Projects */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">By Project Allocation</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>By Project Allocation</h3>
               <ReportTable columns={projColumns} data={data.by_project} pageSize={5} />
             </div>
           </div>

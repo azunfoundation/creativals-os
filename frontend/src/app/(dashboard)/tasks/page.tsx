@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CheckSquare, Search, Plus, List, LayoutGrid, Calendar, MoreHorizontal,
-  Trash2, User, Clock, AlertCircle, PlusCircle, CheckCircle2, RefreshCw, X
+  Trash2, User, Clock, AlertCircle, PlusCircle, CheckCircle2, RefreshCw, X, FolderOpen
 } from 'lucide-react';
 import {
   tasks as tasksApi,
@@ -24,11 +27,23 @@ const STATUS_COLUMNS = [
 ];
 
 export default function TasksPage() {
+  const { confirm, prompt } = useModal();
   const queryClient = useQueryClient();
 
   // Layout & Navigation View Mode
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') === 'true') {
+        setShowCreateModal(true);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+    }
+  }, []);
 
   // Filters State
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,42 +237,57 @@ export default function TasksPage() {
   const doneTasks = filteredTasks.filter((t) => t.status === 'done');
 
   return (
-    <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-6">
+    <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
-            <CheckSquare className="text-violet-500 w-6 h-6" />
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckSquare size={22} style={{ color: 'var(--accent)' }} />
             Task Manager
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '2px' }}>
             Track milestones, log timesheet workloads, and check project tasks progression.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {/* Toggle view mode */}
-          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+          <div style={{ background: 'var(--surface-elevated)', borderRadius: 'var(--radius-md)', padding: '3px', display: 'flex', border: '1px solid var(--border)' }}>
             <button
               onClick={() => setViewMode('kanban')}
-              className={`p-1.5 rounded-md transition ${viewMode === 'kanban' ? 'bg-zinc-800 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className="btn btn-sm"
+              style={{
+                background: viewMode === 'kanban' ? 'var(--surface)' : 'transparent',
+                color: viewMode === 'kanban' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                padding: '0.375rem 0.625rem',
+                borderRadius: 'var(--radius-sm)'
+              }}
               title="Kanban Board"
             >
-              <LayoutGrid size={16} />
+              <LayoutGrid size={14} style={{ marginRight: '4px' }} />
+              Board View
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-md transition ${viewMode === 'list' ? 'bg-zinc-800 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className="btn btn-sm"
+              style={{
+                background: viewMode === 'list' ? 'var(--surface)' : 'transparent',
+                color: viewMode === 'list' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                padding: '0.375rem 0.625rem',
+                borderRadius: 'var(--radius-sm)'
+              }}
               title="List View"
             >
-              <List size={16} />
+              <List size={14} style={{ marginRight: '4px' }} />
+              List View
             </button>
           </div>
 
           <button
             onClick={() => refetch()}
-            className="p-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-zinc-150 rounded-lg transition"
+            className="btn btn-secondary btn-sm"
+            style={{ padding: '0.5rem' }}
             title="Refresh tasks"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
@@ -265,7 +295,7 @@ export default function TasksPage() {
 
           <button 
             onClick={() => setShowCreateModal(true)}
-            className="btn btn-primary flex items-center gap-1.5"
+            className="btn btn-primary"
           >
             <Plus size={16} /> Add Task
           </button>
@@ -273,41 +303,43 @@ export default function TasksPage() {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem' }}>
         {STATUS_COLUMNS.map((col) => {
           const count = taskList.filter((t) => t.status === col.id).length;
           return (
-            <div key={col.id} className="bg-zinc-900/60 border border-zinc-850 p-3.5 rounded-xl">
-              <span className="text-[10px] uppercase font-bold tracking-wider" style={{ color: col.color }}>{col.label}</span>
-              <h3 className="text-lg font-extrabold text-zinc-100 mt-1">{count}</h3>
+            <div key={col.id} className="kpi-card" style={{ borderLeft: `4px solid ${col.color}` }}>
+              <span className="kpi-label" style={{ color: col.color, fontSize: '0.6875rem', textTransform: 'uppercase', fontWeight: 700 }}>{col.label}</span>
+              <div className="kpi-value" style={{ marginTop: '0.25rem', fontSize: '1.25rem' }}>{count}</div>
             </div>
           );
         })}
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-2.5 text-zinc-500 w-4.5 h-4.5" />
+      <div className="card-elevated" style={{ padding: '1rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+          <Search size={15} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
             placeholder="Search tasks title..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-880 text-zinc-100 text-sm rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="form-input"
+            style={{ paddingLeft: '2.25rem', height: '38px', fontSize: '0.875rem', width: '100%' }}
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Project filter */}
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
-            className="bg-zinc-900 border border-zinc-880 text-zinc-300 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+            className="form-input"
+            style={{ minWidth: '150px', height: '38px', padding: '0 0.5rem', fontSize: '0.8125rem' }}
           >
             <option value="">All Projects</option>
             {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.project_number} - {p.name}</option>
+              <option key={p.id} value={p.id}>{p.project_number || `PRJ-${p.id}`} - {p.name}</option>
             ))}
           </select>
 
@@ -315,7 +347,8 @@ export default function TasksPage() {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="bg-zinc-900 border border-zinc-880 text-zinc-300 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+            className="form-input"
+            style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.8125rem' }}
           >
             <option value="">All Priorities</option>
             <option value="low">Low</option>
@@ -328,7 +361,8 @@ export default function TasksPage() {
           <select
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}
-            className="bg-zinc-900 border border-zinc-880 text-zinc-300 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+            className="form-input"
+            style={{ width: '150px', height: '38px', padding: '0 0.5rem', fontSize: '0.8125rem' }}
           >
             <option value="">All Assignees</option>
             {users.map((u) => (
@@ -345,9 +379,9 @@ export default function TasksPage() {
                 setPriorityFilter('');
                 setAssigneeFilter('');
               }}
-              className="text-xs text-zinc-400 hover:text-zinc-200 underline px-2"
+              style={{ color: 'var(--danger)', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px', padding: '0.5rem' }}
             >
-              Clear
+              <X size={12} /> Clear Filters
             </button>
           )}
         </div>
@@ -355,10 +389,12 @@ export default function TasksPage() {
 
       {/* Main Views */}
       {isLoading ? (
-        <div className="p-12 text-center text-zinc-400 animate-pulse">Loading Tasks Board...</div>
+        <div className="data-table-wrap" style={{ padding: '2rem' }}>
+          <SkeletonTable rows={5} cols={5} />
+        </div>
       ) : viewMode === 'kanban' ? (
         /* Kanban Board View */
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-start">
+        <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '1rem', minHeight: 'calc(100vh - 360px)', alignItems: 'flex-start' }}>
           {STATUS_COLUMNS.map((col) => {
             const colTasks = 
               col.id === 'todo' ? todoTasks :
@@ -371,69 +407,87 @@ export default function TasksPage() {
                 key={col.id} 
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col.id as Task['status'])}
-                className="bg-zinc-950/40 border border-zinc-900 rounded-xl p-3 flex flex-col space-y-3.5 min-h-[500px]"
-                style={{ background: col.bg }}
+                style={{
+                  width: '280px',
+                  minWidth: '280px',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-lg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  maxHeight: 'calc(100vh - 320px)',
+                  transition: 'background var(--transition-fast), border var(--transition-fast)'
+                }}
               >
                 {/* Column Title */}
-                <div className="flex justify-between items-center border-b border-zinc-850 pb-2">
-                  <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: col.color }} />
-                    {col.label}
-                  </span>
-                  <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-bold">
+                <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: col.color }} />
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{col.label}</span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: '9999px', padding: '1px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>
                     {colTasks.length}
                   </span>
                 </div>
 
                 {/* Task Cards Container */}
-                <div className="flex flex-col gap-2 overflow-y-auto max-h-[70vh] scrollbar-none">
+                <div style={{ flex: 1, overflowY: 'auto', padding: '0.625rem', display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
                   {colTasks.map((t) => (
                     <div
                       key={t.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, t.id)}
                       onClick={() => handleCardClick(t.id)}
-                      className="bg-zinc-900 border border-zinc-850 hover:border-zinc-700 p-3 rounded-lg cursor-grab active:cursor-grabbing transition shadow-sm hover:shadow flex flex-col space-y-2.5"
+                      className="crm-kanban-card"
+                      style={{
+                        background: 'var(--surface-elevated)',
+                        border: '1px solid var(--border)',
+                        borderLeft: `4px solid ${col.color}`,
+                        borderRadius: 'var(--radius-md)',
+                        padding: '0.875rem',
+                        cursor: 'grab',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.5rem'
+                      }}
                     >
-                      <div className="flex justify-between items-start gap-1">
-                        <span className="text-[10px] text-zinc-500 font-mono">TSK-{t.id}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.25rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>TSK-{t.id}</span>
                         <span 
-                          className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded"
-                          style={{
-                            background: 
-                              t.priority === 'urgent' ? 'rgba(239,68,68,0.1)' : 
-                              t.priority === 'high' ? 'rgba(245,158,11,0.1)' : 'rgba(120,120,120,0.1)',
-                            color: 
-                              t.priority === 'urgent' ? 'var(--danger)' : 
-                              t.priority === 'high' ? 'var(--warning)' : 'var(--text-secondary)'
-                          }}
+                          className={`badge ${
+                            t.priority === 'urgent' ? 'badge-danger' : 
+                            t.priority === 'high' ? 'badge-warning' : 
+                            t.priority === 'medium' ? 'badge-info' : 'badge-muted'
+                          }`}
+                          style={{ fontSize: '0.55rem', padding: '1px 4px' }}
                         >
                           {t.priority}
                         </span>
                       </div>
 
-                      <h4 className="text-xs font-semibold text-zinc-200 line-clamp-2 leading-relaxed">{t.title}</h4>
+                      <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, margin: 0 }}>{t.title}</h4>
                       
                       {t.project && (
-                        <div className="text-[10px] text-violet-400 font-medium truncate">
-                          📁 {t.project.name}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.6875rem', color: 'var(--accent)', fontWeight: 550, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          <FolderOpen size={11} />
+                          {t.project.name}
                         </div>
                       )}
 
                       {/* Card Footer */}
-                      <div className="pt-2 border-t border-zinc-850 flex items-center justify-between text-[10px] text-zinc-500">
-                        <span className="flex items-center gap-1">
-                          <Calendar size={10} />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.5rem', marginTop: '0.25rem', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          <Calendar size={11} />
                           {t.due_date ? formatDate(t.due_date) : 'No due date'}
                         </span>
 
-                        <div className="flex items-center gap-1.5">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           {t.estimated_hours && (
-                            <span className="font-mono text-[9px] bg-zinc-850 text-zinc-400 px-1.5 py-0.5 rounded">
+                            <span style={{ fontFamily: 'monospace', fontSize: '0.625rem', background: 'var(--surface)', border: '1px solid var(--border)', padding: '1px 4px', borderRadius: 'var(--radius-sm)' }}>
                               {t.estimated_hours}h
                             </span>
                           )}
-                          <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-300" title={t.assignee?.name || 'Unassigned'}>
+                          <div className="avatar avatar-sm" style={{ width: 18, height: 18, fontSize: '0.55rem' }} title={t.assignee?.name || 'Unassigned'}>
                             {t.assignee ? t.assignee.name.substring(0, 2).toUpperCase() : '—'}
                           </div>
                         </div>
@@ -442,7 +496,7 @@ export default function TasksPage() {
                   ))}
 
                   {colTasks.length === 0 && (
-                    <div className="py-6 text-center text-zinc-600 text-[10px] border border-dashed border-zinc-850 rounded-lg">
+                    <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
                       Empty column
                     </div>
                   )}
@@ -453,80 +507,83 @@ export default function TasksPage() {
         </div>
       ) : (
         /* List View (Table Mode) */
-        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
+        <div className="data-table-wrap">
           {filteredTasks.length === 0 ? (
-            <div className="p-12 text-center text-zinc-500 space-y-2">
-              <CheckSquare className="mx-auto w-12 h-12 text-zinc-650" />
-              <h3 className="font-semibold text-zinc-300">No Tasks Found</h3>
-              <p className="text-xs text-zinc-500">Try adjusting your filters or create a task.</p>
-            </div>
+            <EmptyState
+              title="No tasks found"
+              description="Adjust your filters or create a new task to get started."
+            />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-zinc-950/80 border-b border-zinc-800 text-zinc-400 text-xs font-bold uppercase tracking-wider">
-                    <th className="p-4">Task Info</th>
-                    <th className="p-4">Project</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Priority</th>
-                    <th className="p-4">Assignee</th>
-                    <th className="p-4">Due Date</th>
-                    <th className="p-4 text-right">Estimate</th>
-                    <th className="p-4"></th>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Task Info</th>
+                  <th>Project</th>
+                  <th>Status</th>
+                  <th>Priority</th>
+                  <th>Assignee</th>
+                  <th>Due Date</th>
+                  <th style={{ textAlign: 'right' }}>Estimate</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTasks.map((t) => (
+                  <tr key={t.id}>
+                    <td>
+                      <button 
+                        onClick={() => handleCardClick(t.id)}
+                        className="hover:text-accent"
+                        style={{ fontWeight: 600, color: 'var(--text-primary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        {t.title}
+                      </button>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: '2px' }}>TSK-{t.id}</div>
+                    </td>
+                    <td style={{ color: 'var(--text-secondary)' }}>
+                      {t.project ? t.project.name : '—'}
+                    </td>
+                    <td>
+                      <span 
+                        className={`badge ${
+                          t.status === 'done' ? 'badge-success' : 
+                          t.status === 'in_progress' ? 'badge-accent' : 'badge-info'
+                        }`}
+                        style={{ fontSize: '0.75rem' }}
+                      >
+                        {t.status === 'in_progress' ? 'In Progress' : (t.status === 'todo' ? 'To Do' : t.status)}
+                      </span>
+                    </td>
+                    <td style={{ textTransform: 'capitalize' }}>
+                      <span className={`badge ${
+                        t.priority === 'urgent' ? 'badge-danger' : 
+                        t.priority === 'high' ? 'badge-warning' : 
+                        t.priority === 'medium' ? 'badge-info' : 'badge-muted'
+                      }`} style={{ fontSize: '0.75rem' }}>
+                        {t.priority}
+                      </span>
+                    </td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{t.assignee?.name || 'Unassigned'}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{t.due_date ? formatDate(t.due_date) : '—'}</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 500 }}>{t.estimated_hours ? `${t.estimated_hours} hrs` : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        onClick={async () => {
+                          if (await confirm({ message: 'Are you sure you want to delete this task?', variant: 'danger' })) {
+                            deleteTaskMutation.mutate(t.id);
+                          }
+                        }}
+                        className="btn btn-danger btn-sm btn-icon"
+                        style={{ padding: '0.375rem' }}
+                        title="Delete task"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
-                  {filteredTasks.map((t) => (
-                    <tr key={t.id} className="hover:bg-zinc-900/40 transition">
-                      <td className="p-4">
-                        <button 
-                          onClick={() => handleCardClick(t.id)}
-                          className="font-semibold text-zinc-200 hover:text-violet-400 text-left transition"
-                        >
-                          {t.title}
-                        </button>
-                        <div className="text-[10px] text-zinc-500 font-mono mt-0.5">TSK-{t.id}</div>
-                      </td>
-                      <td className="p-4 font-medium text-zinc-450">
-                        {t.project ? t.project.name : '—'}
-                      </td>
-                      <td className="p-4">
-                        <span 
-                          className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                          style={{
-                            background: 
-                              t.status === 'done' ? 'rgba(16,185,129,0.15)' : 
-                              t.status === 'in_progress' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)',
-                            color: 
-                              t.status === 'done' ? 'var(--success)' : 
-                              t.status === 'in_progress' ? 'var(--warning)' : 'var(--accent)'
-                          }}
-                        >
-                          {t.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="p-4 capitalize">{t.priority}</td>
-                      <td className="p-4">{t.assignee?.name || 'Unassigned'}</td>
-                      <td className="p-4">{t.due_date ? formatDate(t.due_date) : '—'}</td>
-                      <td className="p-4 text-right font-mono font-medium">{t.estimated_hours ? `${t.estimated_hours} hrs` : '—'}</td>
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => {
-                            if (confirm('Are you sure you want to delete this task?')) {
-                              deleteTaskMutation.mutate(t.id);
-                            }
-                          }}
-                          className="text-zinc-500 hover:text-red-400 transition"
-                          title="Delete task"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}
@@ -534,46 +591,65 @@ export default function TasksPage() {
       {/* Create Task Modal */}
       {showCreateModal && (
         <>
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" onClick={() => setShowCreateModal(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-zinc-900 border border-zinc-850 p-6 rounded-xl z-50 shadow-2xl flex flex-col space-y-4">
-            <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
-              <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
-                <PlusCircle className="text-violet-500 w-5 h-5" />
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 60 }} onClick={() => setShowCreateModal(false)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add New Task"
+            style={{
+              position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: '500px', maxWidth: '90vw',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              zIndex: 61,
+              display: 'flex', flexDirection: 'column',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <PlusCircle size={18} style={{ color: 'var(--accent)' }} />
                 Add New Task
               </h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-zinc-500 hover:text-zinc-200">
-                <X size={18} />
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)', background: 'none', border: 'none', cursor: 'pointer' }}
+                className="hover:text-primary hover:bg-surface-elevated"
+              >
+                <X size={16} />
               </button>
             </div>
 
             {createError && (
-              <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-lg text-xs text-red-400 flex gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{createError}</span>
+              <div style={{ margin: '1rem 1.5rem 0', padding: '0.75rem', background: 'var(--danger-subtle)', border: '1px solid var(--danger)', borderRadius: 'var(--radius-md)', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <AlertCircle size={16} style={{ color: 'var(--danger)' }} />
+                <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>{createError}</span>
               </div>
             )}
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Task Title *</label>
+            <form onSubmit={handleCreateSubmit} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="form-group">
+                <label className="form-label">Task Title *</label>
                 <input
                   type="text"
                   required
                   placeholder="What needs to be completed?"
                   value={createTitle}
                   onChange={(e) => setCreateTitle(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                  className="form-input"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-300">Select Project *</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Select Project *</label>
                   <select
                     required
                     value={createProjectId}
                     onChange={(e) => setCreateProjectId(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-850 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                    className="form-input"
+                    style={{ height: '38px', padding: '0 0.5rem', fontSize: '0.875rem' }}
                   >
                     <option value="">Select a project...</option>
                     {projects.map((p) => (
@@ -582,12 +658,13 @@ export default function TasksPage() {
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-300">Priority</label>
+                <div className="form-group">
+                  <label className="form-label">Priority</label>
                   <select
                     value={createPriority}
                     onChange={(e) => setCreatePriority(e.target.value as any)}
-                    className="w-full bg-zinc-950 border border-zinc-850 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                    className="form-input"
+                    style={{ height: '38px', padding: '0 0.5rem', fontSize: '0.875rem' }}
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -597,24 +674,25 @@ export default function TasksPage() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300">Description</label>
+              <div className="form-group">
+                <label className="form-label">Description</label>
                 <textarea
                   placeholder="Task details and scope..."
                   value={createDescription}
                   onChange={(e) => setCreateDescription(e.target.value)}
-                  rows={3}
-                  className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500 resize-none"
+                  className="form-input"
+                  style={{ minHeight: '80px', resize: 'vertical' }}
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-300">Assignee</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Assignee</label>
                   <select
                     value={createAssigneeId}
                     onChange={(e) => setCreateAssigneeId(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-850 text-zinc-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                    className="form-input"
+                    style={{ height: '38px', padding: '0 0.5rem', fontSize: '0.875rem' }}
                   >
                     <option value="">Unassigned</option>
                     {users.map((u) => (
@@ -623,40 +701,42 @@ export default function TasksPage() {
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-300">Due Date</label>
+                <div className="form-group">
+                  <label className="form-label">Due Date</label>
                   <input
                     type="date"
                     value={createDueDate}
                     onChange={(e) => setCreateDueDate(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                    className="form-input"
+                    style={{ height: '38px' }}
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-300">Estimate (Hours)</label>
+                <div className="form-group">
+                  <label className="form-label">Estimate (Hours)</label>
                   <input
                     type="number"
                     placeholder="e.g. 15"
                     value={createEstimate}
                     onChange={(e) => setCreateEstimate(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                    className="form-input"
+                    style={{ height: '38px' }}
                   />
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-zinc-800 flex justify-end gap-3">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-zinc-400 bg-zinc-850 hover:bg-zinc-800 rounded-lg transition"
+                  className="btn btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createTaskMutation.isPending}
-                  className="px-4 py-2 text-xs font-bold text-zinc-100 bg-violet-650 hover:bg-violet-600 rounded-lg transition"
+                  className="btn btn-primary"
                 >
                   {createTaskMutation.isPending ? 'Saving...' : 'Save Task'}
                 </button>

@@ -13,6 +13,7 @@ export interface User {
   status: 'active' | 'inactive';
   employee_id?: string;
   phone?: string;
+  must_change_password?: boolean;
 }
 
 interface AuthState {

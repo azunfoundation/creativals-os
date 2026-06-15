@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, Edit2, Trash2, ArrowUp, ArrowDown, Settings, 
@@ -77,6 +80,7 @@ const COLOR_PRESETS = [
 ];
 
 export default function CRMSettingsPage() {
+  const { confirm, prompt } = useModal();
   const queryClient = useQueryClient();
 
   // Forms state
@@ -305,7 +309,7 @@ export default function CRMSettingsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 560px), 1fr))', gap: '2rem' }}>
         
         {/* ============================================================
             COLUMN 1: LEAD STAGES CONFIG
@@ -345,16 +349,14 @@ export default function CRMSettingsPage() {
                             <button
                               disabled={idx === 0}
                               onClick={() => handleMoveStage(stage, 'up')}
-                              style={{ padding: '2px', color: idx === 0 ? 'var(--border)' : 'var(--text-muted)' }}
-                              className="hover:text-primary disabled:cursor-not-allowed"
+                              style={{ padding: '2px', color: idx === 0 ? 'var(--border)' : 'var(--text-muted)', background: 'none', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
                             >
                               <ArrowUp size={11} />
                             </button>
                             <button
                               disabled={idx === arr.length - 1}
                               onClick={() => handleMoveStage(stage, 'down')}
-                              style={{ padding: '2px', color: idx === arr.length - 1 ? 'var(--border)' : 'var(--text-muted)' }}
-                              className="hover:text-primary disabled:cursor-not-allowed"
+                              style={{ padding: '2px', color: idx === arr.length - 1 ? 'var(--border)' : 'var(--text-muted)', background: 'none', border: 'none', cursor: idx === arr.length - 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
                             >
                               <ArrowDown size={11} />
                             </button>
@@ -400,8 +402,8 @@ export default function CRMSettingsPage() {
                             </button>
                             <button
                               disabled={stage.is_system}
-                              onClick={() => {
-                                if (confirm(`Delete custom stage "${stage.name}"?`)) {
+                              onClick={async () => {
+                                if (await confirm({ message: `Delete custom stage "${stage.name}"?`, variant: 'danger' })) {
                                   deleteStageMutation.mutate(stage.id);
                                 }
                               }}
@@ -483,7 +485,6 @@ export default function CRMSettingsPage() {
                         cursor: 'pointer',
                         transition: 'transform 0.15s ease'
                       }}
-                      className="hover:scale-110"
                     />
                   ))}
                   
@@ -599,8 +600,8 @@ export default function CRMSettingsPage() {
                                 <Edit2 size={13} />
                               </button>
                               <button
-                                onClick={() => {
-                                  if (confirm(`Delete acquisition channel "${src.name}"?`)) {
+                                onClick={async () => {
+                                  if (await confirm({ message: `Delete acquisition channel "${src.name}"?`, variant: 'danger' })) {
                                     deleteSourceMutation.mutate(src.id);
                                   }
                                 }}
@@ -688,7 +689,6 @@ export default function CRMSettingsPage() {
                         cursor: 'pointer',
                         transition: 'transform 0.15s ease'
                       }}
-                      className="hover:scale-110"
                     />
                   ))}
                   

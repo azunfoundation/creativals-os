@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Zap, LogOut, FolderKanban, FileText, ChevronRight,
   Clock, TrendingUp, CheckCircle2, AlertCircle, BarChart2,
-  ExternalLink, RefreshCw,
+  ExternalLink, RefreshCw, User,
 } from 'lucide-react';
 import { portal, PortalProject, PortalInvoice, PaginationMeta } from '@/lib/api';
 
@@ -159,8 +159,9 @@ export default function PortalDashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {user && (
-              <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                👋 {user.name}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                <User size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                {user.name}
               </span>
             )}
             <button

@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoices as invoicesApi, payments as paymentsApi } from '@/lib/api';
@@ -308,16 +311,17 @@ const saveStoredInvoices = (invoices: Invoice[]) => {
   }
 };
 
-const INVOICE_STATUSES: Array<{ value: Invoice['status']; label: string; color: string }> = [
-  { value: 'draft', label: 'Draft', color: 'border-zinc-700 bg-zinc-800 text-zinc-400' },
-  { value: 'sent', label: 'Sent', color: 'border-blue-900/50 bg-blue-950/40 text-blue-400' },
-  { value: 'partially_paid', label: 'Partially Paid', color: 'border-amber-900/50 bg-amber-950/40 text-amber-400' },
-  { value: 'paid', label: 'Paid', color: 'border-emerald-900/50 bg-emerald-950/40 text-emerald-400' },
-  { value: 'overdue', label: 'Overdue', color: 'border-red-900/50 bg-red-950/40 text-red-400' },
-  { value: 'cancelled', label: 'Cancelled', color: 'border-zinc-800 bg-zinc-900/60 text-zinc-500' },
+const INVOICE_STATUSES: Array<{ value: Invoice['status']; label: string }> = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'partially_paid', label: 'Partially Paid' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 export default function InvoicesDashboard() {
+  const { confirm, prompt } = useModal();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'invoices' | 'payments'>('invoices');
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
@@ -335,7 +339,7 @@ export default function InvoicesDashboard() {
   const [paymentError, setPaymentError] = useState('');
 
   // Fetch Invoices and Payments using React Query
-  const { data, refetch } = useQuery({
+  const { data, refetch, isLoading: isLoadingInvoices } = useQuery({
     queryKey: ['invoices_dashboard'],
     queryFn: async () => {
       try {
@@ -508,116 +512,144 @@ export default function InvoicesDashboard() {
     closePaymentDrawer();
   };
 
-  const handleDeleteInvoice = (id: number) => {
-    if (confirm('Are you sure you want to delete this invoice?')) {
+  const handleDeleteInvoice = async (id: number) => {
+    if (await confirm({ message: 'Are you sure you want to delete this invoice?', variant: 'danger' })) {
       const updated = allInvoices.filter(inv => inv.id !== id);
       saveStoredInvoices(updated);
       refetch();
     }
   };
 
+  // Helper: Status badge colors
+  const getStatusBadge = (status: Invoice['status']) => {
+    const badges: Record<Invoice['status'], { label: string; className: string }> = {
+      draft: { label: 'Draft', className: 'badge-muted' },
+      sent: { label: 'Sent', className: 'badge-info' },
+      partially_paid: { label: 'Partially Paid', className: 'badge-warning' },
+      paid: { label: 'Paid', className: 'badge-success' },
+      overdue: { label: 'Overdue', className: 'badge-danger' },
+      cancelled: { label: 'Cancelled', className: 'badge-muted' },
+    };
+
+    const config = badges[status] || { label: status, className: 'badge-muted' };
+
+    return (
+      <span className={`badge ${config.className}`}>
+        {config.label}
+      </span>
+    );
+  };
+
   return (
-    <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-6">
+    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
       {/* ── Top Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '1.25rem' }}>
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
-            <Receipt className="text-violet-500 w-6 h-6" />
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Receipt className="text-accent" size={24} />
             Invoices & Billings
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
             Issue client invoices, track collection schedules, record transactions, and analyze aging receivables.
           </p>
         </div>
-        <Link href="/invoices/create" className="btn btn-primary flex items-center gap-1.5 self-start sm:self-auto">
+        <Link href="/invoices/create" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Plus size={16} /> Create Invoice
         </Link>
       </div>
 
       {/* ── Stats Summary Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-zinc-900 border border-zinc-850 p-4 rounded-xl relative overflow-hidden">
-          <div className="flex justify-between items-start">
+      <div className="kpi-grid kpi-grid-4">
+        <div className="kpi-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <p className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Total Invoiced</p>
-              <h3 className="text-xl font-bold text-zinc-100 mt-1">{formatCurrency(totalInvoiced)}</h3>
+              <span className="kpi-label">Total Invoiced</span>
+              <span className="kpi-value">{formatCurrency(totalInvoiced)}</span>
             </div>
-            <div className="p-2 rounded-lg bg-zinc-800 text-zinc-300">
+            <div style={{ padding: '0.5rem', borderRadius: 'var(--radius-sm)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', display: 'flex' }}>
               <Banknote size={16} />
             </div>
           </div>
-          <div className="text-[10px] text-zinc-500 mt-3 flex items-center gap-1">
-            <Clock size={10} /> Active invoice schedules
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            <Clock size={12} /> Active invoice schedules
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-850 p-4 rounded-xl relative overflow-hidden">
-          <div className="flex justify-between items-start">
+        <div className="kpi-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <p className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Payments Collected</p>
-              <h3 className="text-xl font-bold text-emerald-400 mt-1">{formatCurrency(totalCollected)}</h3>
+              <span className="kpi-label">Payments Collected</span>
+              <span className="kpi-value text-success">{formatCurrency(totalCollected)}</span>
             </div>
-            <div className="p-2 rounded-lg bg-emerald-950/30 text-emerald-400">
+            <div style={{ padding: '0.5rem', borderRadius: 'var(--radius-sm)', background: 'var(--success-subtle)', color: 'var(--success)', display: 'flex' }}>
               <ArrowDownLeft size={16} />
             </div>
           </div>
-          <div className="text-[10px] text-zinc-500 mt-3">
-            Collection Rate: <span className="text-emerald-500 font-bold">{totalInvoiced > 0 ? Math.round((totalCollected / totalInvoiced) * 100) : 0}%</span>
+          <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            Collection Rate: <span className="text-success font-bold">{totalInvoiced > 0 ? Math.round((totalCollected / totalInvoiced) * 100) : 0}%</span>
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-850 p-4 rounded-xl relative overflow-hidden">
-          <div className="flex justify-between items-start">
+        <div className="kpi-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <p className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Outstanding Balance</p>
-              <h3 className="text-xl font-bold text-amber-400 mt-1">{formatCurrency(totalOutstanding)}</h3>
+              <span className="kpi-label">Outstanding Balance</span>
+              <span className="kpi-value text-warning">{formatCurrency(totalOutstanding)}</span>
             </div>
-            <div className="p-2 rounded-lg bg-amber-950/30 text-amber-400">
+            <div style={{ padding: '0.5rem', borderRadius: 'var(--radius-sm)', background: 'var(--warning-subtle)', color: 'var(--warning)', display: 'flex' }}>
               <ArrowUpRight size={16} />
             </div>
           </div>
-          <div className="text-[10px] text-zinc-500 mt-3">
+          <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
             Pending user logs & collections
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-850 p-4 rounded-xl relative overflow-hidden">
-          <div className="flex justify-between items-start">
+        <div className="kpi-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <p className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Overdue Receivables</p>
-              <h3 className="text-xl font-bold text-red-400 mt-1">{formatCurrency(totalOverdue)}</h3>
+              <span className="kpi-label">Overdue Receivables</span>
+              <span className="kpi-value text-danger">{formatCurrency(totalOverdue)}</span>
             </div>
-            <div className="p-2 rounded-lg bg-red-950/30 text-red-400">
+            <div style={{ padding: '0.5rem', borderRadius: 'var(--radius-sm)', background: 'var(--danger-subtle)', color: 'var(--danger)', display: 'flex' }}>
               <AlertTriangle size={16} />
             </div>
           </div>
-          <div className="text-[10px] text-zinc-500 mt-3">
+          <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
             Needs follow-up action
           </div>
         </div>
       </div>
 
       {/* ── Tabs Navigation ── */}
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-        <div className="flex gap-4">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '1.5rem' }}>
           <button
             onClick={() => setActiveTab('invoices')}
-            className={`pb-2 text-sm font-semibold border-b-2 transition ${
-              activeTab === 'invoices' 
-                ? 'border-violet-500 text-violet-400' 
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+            style={{
+              paddingBottom: '0.5rem',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              borderBottom: '2px solid',
+              borderColor: activeTab === 'invoices' ? 'var(--accent)' : 'transparent',
+              color: activeTab === 'invoices' ? 'var(--accent)' : 'var(--text-secondary)',
+              transition: 'all var(--transition-fast)'
+            }}
           >
             Invoices List
           </button>
           <button
             onClick={() => setActiveTab('payments')}
-            className={`pb-2 text-sm font-semibold border-b-2 transition ${
-              activeTab === 'payments' 
-                ? 'border-violet-500 text-violet-400' 
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+            style={{
+              paddingBottom: '0.5rem',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              borderBottom: '2px solid',
+              borderColor: activeTab === 'payments' ? 'var(--accent)' : 'transparent',
+              color: activeTab === 'payments' ? 'var(--accent)' : 'var(--text-secondary)',
+              transition: 'all var(--transition-fast)'
+            }}
           >
             Collection Log History
           </button>
@@ -625,17 +657,19 @@ export default function InvoicesDashboard() {
 
         {/* View Mode Toggle (only for invoices tab) */}
         {activeTab === 'invoices' && (
-          <div className="flex bg-zinc-900 border border-zinc-800 p-1 rounded-lg">
+          <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', padding: '2px', borderRadius: 'var(--radius-md)' }}>
             <button
               onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-md transition ${viewMode === 'table' ? 'bg-zinc-800 text-zinc-150' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`btn btn-icon ${viewMode === 'table' ? 'btn-secondary' : ''}`}
+              style={{ padding: '0.375rem', borderRadius: 'var(--radius-sm)', color: viewMode === 'table' ? 'var(--text-primary)' : 'var(--text-muted)' }}
               title="Table View"
             >
               <List size={16} />
             </button>
             <button
               onClick={() => setViewMode('board')}
-              className={`p-1.5 rounded-md transition ${viewMode === 'board' ? 'bg-zinc-800 text-zinc-150' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`btn btn-icon ${viewMode === 'board' ? 'btn-secondary' : ''}`}
+              style={{ padding: '0.375rem', borderRadius: 'var(--radius-sm)', color: viewMode === 'board' ? 'var(--text-primary)' : 'var(--text-muted)' }}
               title="Board View"
             >
               <LayoutGrid size={16} />
@@ -646,27 +680,29 @@ export default function InvoicesDashboard() {
 
       {/* ── Tab: Invoices ── */}
       {activeTab === 'invoices' && (
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* Filter Bar */}
-          <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
             {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-2.5 text-zinc-500 w-4.5 h-4.5" />
+            <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+              <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 placeholder="Search by invoice #, client, or title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
+                style={{ paddingLeft: '2.5rem', width: '100%' }}
               />
             </div>
 
             {/* Filter Dropdown */}
-            <div className="flex items-center gap-2">
+            <div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-zinc-900 border border-zinc-800 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
+                style={{ width: '180px' }}
               >
                 <option value="all">All Invoices</option>
                 <option value="draft">Draft</option>
@@ -681,71 +717,70 @@ export default function InvoicesDashboard() {
 
           {/* Table View */}
           {viewMode === 'table' && (
-            filteredInvoices.length === 0 ? (
-              <div className="p-12 bg-zinc-900/30 border border-zinc-800 rounded-xl text-center flex flex-col items-center justify-center space-y-3">
-                <Receipt size={44} className="text-zinc-600" />
-                <h3 className="text-zinc-350 font-medium">No invoices found</h3>
-                <p className="text-xs text-zinc-500 max-w-sm">
-                  Try adjusting filters or search query, or create a brand new billing layout.
-                </p>
-                <Link href="/invoices/create" className="btn btn-secondary text-xs">
-                  Create First Invoice
-                </Link>
+            isLoadingInvoices ? (
+              <div className="data-table-wrap">
+                <SkeletonTable rows={5} cols={6} />
               </div>
+            ) : filteredInvoices.length === 0 ? (
+              <EmptyState
+                title="No invoices found"
+                description="Try adjusting filters or search query, or create a brand new billing layout."
+                action={
+                  <Link href="/invoices/create" className="btn btn-secondary btn-sm" style={{ marginTop: '0.5rem' }}>
+                    Create First Invoice
+                  </Link>
+                }
+              />
             ) : (
-              <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm border-collapse">
+              <div className="data-table-wrap">
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table">
                     <thead>
-                      <tr className="bg-zinc-950/80 border-b border-zinc-800 text-zinc-400 text-xs font-bold uppercase tracking-wider">
-                        <th className="p-4">Invoice #</th>
-                        <th className="p-4">Client Name</th>
-                        <th className="p-4">Invoice Title</th>
-                        <th className="p-4">Total Amount</th>
-                        <th className="p-4">Balance Due</th>
-                        <th className="p-4">Due Date</th>
-                        <th className="p-4">Status</th>
-                        <th className="p-4 text-center">Actions</th>
+                      <tr>
+                        <th>Invoice #</th>
+                        <th>Client Name</th>
+                        <th>Invoice Title</th>
+                        <th>Total Amount</th>
+                        <th>Balance Due</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+                    <tbody>
                       {filteredInvoices.map((inv) => (
-                        <tr key={inv.id} className="hover:bg-zinc-900/40 transition">
-                          <td className="p-4 font-mono text-xs text-violet-400 font-semibold">
+                        <tr key={inv.id}>
+                          <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>
                             {inv.invoice_number}
                           </td>
-                          <td className="p-4">
-                            <div className="font-semibold text-zinc-200">{inv.client_name}</div>
-                            {inv.client_email && <div className="text-[10px] text-zinc-500 font-medium">{inv.client_email}</div>}
+                          <td>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{inv.client_name}</div>
+                            {inv.client_email && <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: '2px' }}>{inv.client_email}</div>}
                           </td>
-                          <td className="p-4 truncate max-w-xs font-medium text-zinc-200">
+                          <td style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500, color: 'var(--text-primary)' }}>
                             {inv.title}
                           </td>
-                          <td className="p-4 font-bold text-zinc-150">
+                          <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
                             {formatCurrency(inv.total_amount, inv.currency)}
                           </td>
-                          <td className="p-4 font-semibold">
+                          <td style={{ fontWeight: 600 }}>
                             {inv.balance_amount > 0 ? (
-                              <span className="text-amber-400">{formatCurrency(inv.balance_amount, inv.currency)}</span>
+                              <span style={{ color: 'var(--warning)' }}>{formatCurrency(inv.balance_amount, inv.currency)}</span>
                             ) : (
-                              <span className="text-zinc-500">— Paid</span>
+                              <span style={{ color: 'var(--text-muted)' }}>— Paid</span>
                             )}
                           </td>
-                          <td className="p-4 text-xs font-medium">
+                          <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                             {formatDate(inv.due_date)}
                           </td>
-                          <td className="p-4">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                              INVOICE_STATUSES.find(s => s.value === inv.status)?.color || 'border-zinc-700 text-zinc-400'
-                            }`}>
-                              {inv.status.replace('_', ' ').toUpperCase()}
-                            </span>
+                          <td>
+                            {getStatusBadge(inv.status)}
                           </td>
-                          <td className="p-4">
-                            <div className="flex items-center justify-center gap-1.5">
+                          <td>
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.375rem' }}>
                               <Link
                                 href={`/invoices/${inv.id}`}
-                                className="p-1.5 rounded bg-zinc-800/80 text-zinc-300 hover:text-violet-400 hover:bg-zinc-755 transition"
+                                className="btn btn-ghost btn-sm btn-icon"
                                 title="View Details"
                               >
                                 <Eye size={14} />
@@ -753,17 +788,18 @@ export default function InvoicesDashboard() {
                               {inv.balance_amount > 0 && inv.status !== 'cancelled' && (
                                 <button
                                   onClick={() => openPaymentDrawer(inv)}
-                                  className="px-2 py-1 text-xs rounded bg-violet-600/90 text-zinc-100 hover:bg-violet-650 transition font-semibold"
+                                  className="btn btn-primary btn-sm"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                                 >
                                   Record
                                 </button>
                               )}
                               <button
                                 onClick={() => handleDeleteInvoice(inv.id)}
-                                className="p-1.5 rounded bg-zinc-800/80 text-red-400 hover:text-red-300 hover:bg-red-950/20 transition"
+                                className="btn btn-danger btn-sm btn-icon"
                                 title="Delete Invoice"
                               >
-                                <Trash2 size={13} />
+                                <Trash2 size={14} />
                               </button>
                             </div>
                           </td>
@@ -778,23 +814,23 @@ export default function InvoicesDashboard() {
 
           {/* Board View */}
           {viewMode === 'board' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 overflow-x-auto pb-4">
+            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
               {INVOICE_STATUSES.map((col) => {
                 const columnInvoices = filteredInvoices.filter(inv => inv.status === col.value);
                 return (
-                  <div key={col.value} className="bg-zinc-900/30 border border-zinc-850 p-3 rounded-xl flex flex-col min-w-[210px] max-h-[70vh]">
+                  <div key={col.value} className="card" style={{ display: 'flex', flexDirection: 'column', minWidth: '220px', maxHeight: '70vh', padding: '1rem', gap: '0.75rem' }}>
                     {/* Header */}
-                    <div className="flex justify-between items-center pb-3 border-b border-zinc-800/60 mb-3">
-                      <span className="text-xs font-bold text-zinc-300 uppercase tracking-wide">{col.label}</span>
-                      <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-bold">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase' }}>{col.label}</span>
+                      <span style={{ fontSize: '0.6875rem', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '9999px', fontWeight: 700 }}>
                         {columnInvoices.length}
                       </span>
                     </div>
 
                     {/* Cards */}
-                    <div className="space-y-3 flex-1 overflow-y-auto min-h-[150px] scrollbar-none">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', minHeight: '150px' }}>
                       {columnInvoices.length === 0 ? (
-                        <div className="border border-dashed border-zinc-800 rounded-lg p-4 text-center text-[10px] text-zinc-600">
+                        <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', padding: '1rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                           Empty Column
                         </div>
                       ) : (
@@ -803,48 +839,49 @@ export default function InvoicesDashboard() {
                           return (
                             <div 
                               key={inv.id}
-                              className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg hover:border-violet-500/50 transition cursor-pointer space-y-2.5 relative"
+                              className="card"
+                              style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.625rem', cursor: 'pointer', position: 'relative' }}
                             >
-                              <div className="flex justify-between items-start">
-                                <span className="font-mono text-[10px] text-violet-400 font-bold">{inv.invoice_number}</span>
-                                <span className="text-[9px] text-zinc-500">{formatDate(inv.due_date)}</span>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontFamily: 'monospace', fontSize: '0.6875rem', color: 'var(--accent)', fontWeight: 700 }}>{inv.invoice_number}</span>
+                                <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>{formatDate(inv.due_date)}</span>
                               </div>
                               
                               <div>
-                                <h4 className="text-xs font-semibold text-zinc-200 line-clamp-1">{inv.client_name}</h4>
-                                <p className="text-[10px] text-zinc-400 line-clamp-1 mt-0.5">{inv.title}</p>
+                                <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.client_name}</h4>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>{inv.title}</p>
                               </div>
 
-                              <div className="flex justify-between items-center text-[11px] pt-1">
-                                <span className="font-bold text-zinc-300">{formatCurrency(inv.total_amount, inv.currency)}</span>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem', paddingTop: '4px' }}>
+                                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{formatCurrency(inv.total_amount, inv.currency)}</span>
                                 {inv.balance_amount > 0 ? (
-                                  <span className="text-amber-500 font-semibold">{formatCurrency(inv.balance_amount, inv.currency)} due</span>
+                                  <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{formatCurrency(inv.balance_amount, inv.currency)} due</span>
                                 ) : (
-                                  <span className="text-emerald-500 font-bold">Paid</span>
+                                  <span style={{ color: 'var(--success)', fontWeight: 700 }}>Paid</span>
                                 )}
                               </div>
 
                               {/* Progress bar */}
-                              <div className="w-full bg-zinc-850 h-1 rounded-full overflow-hidden">
+                              <div style={{ width: '100%', backgroundColor: 'var(--border-subtle)', height: '4px', borderRadius: '9999px', overflow: 'hidden' }}>
                                 <div 
-                                  className="bg-emerald-500 h-full transition-all duration-350"
-                                  style={{ width: `${Math.min(100, completionRate)}%` }}
+                                  style={{ backgroundColor: 'var(--success)', height: '100%', width: `${Math.min(100, completionRate)}%`, transition: 'width var(--transition-base)' }}
                                 />
                               </div>
 
                               {/* Hover actions */}
-                              <div className="flex justify-end gap-1.5 pt-1.5 border-t border-zinc-800/40">
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.375rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-subtle)' }}>
                                 <Link 
                                   href={`/invoices/${inv.id}`}
-                                  className="p-1 rounded bg-zinc-800/60 text-zinc-400 hover:text-zinc-200"
+                                  className="btn btn-ghost btn-sm btn-icon"
                                   title="View Details"
                                 >
-                                  <Eye size={11} />
+                                  <Eye size={12} />
                                 </Link>
                                 {inv.balance_amount > 0 && inv.status !== 'cancelled' && (
                                   <button
                                     onClick={() => openPaymentDrawer(inv)}
-                                    className="px-1.5 py-0.5 rounded bg-violet-650/80 hover:bg-violet-600 text-zinc-100 text-[9px] font-bold"
+                                    className="btn btn-primary btn-sm"
+                                    style={{ padding: '0.125rem 0.5rem', fontSize: '0.6875rem' }}
                                   >
                                     Pay
                                   </button>
@@ -865,65 +902,65 @@ export default function InvoicesDashboard() {
 
       {/* ── Tab: Payments Log ── */}
       {activeTab === 'payments' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-base font-semibold text-zinc-200 flex items-center gap-1.5">
-              <CreditCard className="text-violet-400 w-4 h-4" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CreditCard className="text-accent" size={18} />
               Recent Collection Log Transactions
             </h2>
           </div>
 
           {allPayments.length === 0 ? (
-            <div className="p-12 bg-zinc-900/30 border border-zinc-800 rounded-xl text-center flex flex-col items-center justify-center space-y-3">
-              <CreditCard size={44} className="text-zinc-600" />
-              <h3 className="text-zinc-350 font-medium">No recorded payments</h3>
-              <p className="text-xs text-zinc-500">
+            <div className="empty-state">
+              <CreditCard size={48} className="empty-state-icon" />
+              <p style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>No recorded payments</p>
+              <p style={{ fontSize: '0.875rem' }}>
                 Any transactions logged through the "Record Payment" drawer will appear here in chronological order.
               </p>
             </div>
           ) : (
-            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
+            <div className="data-table-wrap">
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table">
                   <thead>
-                    <tr className="bg-zinc-950/80 border-b border-zinc-800 text-zinc-400 text-xs font-bold uppercase tracking-wider">
-                      <th className="p-4">Payment Receipt</th>
-                      <th className="p-4">Invoice #</th>
-                      <th className="p-4">Client</th>
-                      <th className="p-4">Payment Method</th>
-                      <th className="p-4">Txn Reference</th>
-                      <th className="p-4">Paid Date</th>
-                      <th className="p-4">Amount</th>
+                    <tr>
+                      <th>Payment Receipt</th>
+                      <th>Invoice #</th>
+                      <th>Client</th>
+                      <th>Payment Method</th>
+                      <th>Txn Reference</th>
+                      <th>Paid Date</th>
+                      <th>Amount</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+                  <tbody>
                     {allPayments.map((pay) => (
-                      <tr key={pay.id} className="hover:bg-zinc-900/40 transition">
-                        <td className="p-4 font-mono text-xs text-emerald-400 font-bold">
+                      <tr key={pay.id}>
+                        <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600 }}>
                           {pay.payment_number}
                         </td>
-                        <td className="p-4">
+                        <td>
                           {pay.invoice ? (
-                            <Link href={`/invoices/${pay.invoice_id}`} className="font-mono text-xs text-violet-400 font-semibold hover:underline">
+                            <Link href={`/invoices/${pay.invoice_id}`} style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>
                               {pay.invoice.invoice_number}
                             </Link>
                           ) : (
-                            <span className="font-mono text-xs text-zinc-500">Invoice #{pay.invoice_id}</span>
+                            <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Invoice #{pay.invoice_id}</span>
                           )}
                         </td>
-                        <td className="p-4">
-                          <span className="font-semibold text-zinc-200">{pay.invoice?.client_name || 'N/A'}</span>
+                        <td>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{pay.invoice?.client_name || 'N/A'}</span>
                         </td>
-                        <td className="p-4 text-xs font-medium uppercase text-zinc-400">
+                        <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
                           {pay.payment_method.replace('_', ' ')}
                         </td>
-                        <td className="p-4 font-mono text-xs text-zinc-400">
-                          {pay.transaction_reference || <span className="text-zinc-650 italic">— None</span>}
+                        <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          {pay.transaction_reference || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>— None</span>}
                         </td>
-                        <td className="p-4 text-xs">
+                        <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                           {formatDate(pay.payment_date)}
                         </td>
-                        <td className="p-4 font-bold text-emerald-400">
+                        <td style={{ fontWeight: 700, color: 'var(--success)' }}>
                           {formatCurrency(pay.amount, pay.invoice?.currency || 'INR')}
                         </td>
                       </tr>
@@ -941,54 +978,54 @@ export default function InvoicesDashboard() {
         <>
           {/* Backdrop */}
           <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity"
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)', zIndex: 50, transition: 'opacity var(--transition-base)' }}
             onClick={closePaymentDrawer}
           />
           {/* Drawer content */}
-          <div className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-zinc-900 border-l border-zinc-800 z-50 flex flex-col shadow-2xl animate-in slide-in-from-right duration-250">
+          <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: '100%', maxWidth: '420px', background: 'var(--surface)', borderLeft: '1px solid var(--border)', zIndex: 100, display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-lg)', animation: 'slideInRight var(--transition-slow)' }}>
             {/* Header */}
-            <div className="p-4 md:p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/40">
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-elevated)' }}>
               <div>
-                <h3 className="text-lg font-bold text-zinc-100">Record Client Payment</h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Log collection transaction for <span className="font-mono text-violet-400 font-bold">{selectedInvoice.invoice_number}</span>
+                <h3 style={{ fontSize: '1.0625rem', fontWeight: 600 }}>Record Client Payment</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Log collection transaction for <span style={{ fontFamily: 'monospace', color: 'var(--accent)', fontWeight: 700 }}>{selectedInvoice.invoice_number}</span>
                 </p>
               </div>
               <button 
                 onClick={closePaymentDrawer}
-                className="p-1 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                className="btn btn-icon btn-secondary"
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleRecordPayment} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+            <form onSubmit={handleRecordPayment} style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               
               {paymentError && (
-                <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-lg text-xs text-red-400 flex gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <div style={{ padding: '0.75rem 1rem', background: 'var(--danger-subtle)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '0.75rem', color: 'var(--danger)', display: 'flex', gap: '0.5rem' }}>
+                  <AlertTriangle style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
                   <span>{paymentError}</span>
                 </div>
               )}
 
               {/* Summary stats */}
-              <div className="grid grid-cols-2 gap-3 p-3 bg-zinc-950/40 rounded-lg border border-zinc-850">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', padding: '0.75rem', background: 'var(--surface-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                 <div>
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Total Billing</span>
-                  <p className="text-sm font-bold text-zinc-200">{formatCurrency(selectedInvoice.total_amount, selectedInvoice.currency)}</p>
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Total Billing</span>
+                  <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>{formatCurrency(selectedInvoice.total_amount, selectedInvoice.currency)}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium font-bold text-amber-500">Outstanding</span>
-                  <p className="text-sm font-bold text-amber-400">{formatCurrency(selectedInvoice.balance_amount, selectedInvoice.currency)}</p>
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Outstanding</span>
+                  <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--warning)' }}>{formatCurrency(selectedInvoice.balance_amount, selectedInvoice.currency)}</p>
                 </div>
               </div>
 
               {/* Amount Input */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300">Amount to Record ({selectedInvoice.currency})</label>
-                <div className="relative">
-                  <div className="absolute left-3 top-2.5 text-zinc-500 text-sm font-semibold">
+              <div className="form-group">
+                <label className="form-label">Amount to Record ({selectedInvoice.currency})</label>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.875rem', fontWeight: 600 }}>
                     {selectedInvoice.currency}
                   </div>
                   <input
@@ -999,37 +1036,38 @@ export default function InvoicesDashboard() {
                     max={selectedInvoice.balance_amount}
                     value={paymentAmount || ''}
                     onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                    className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg pl-12 pr-4 py-2 outline-none focus:border-violet-500"
+                    className="form-input"
+                    style={{ paddingLeft: '3.5rem' }}
                   />
                 </div>
                 <button 
                   type="button" 
                   onClick={() => setPaymentAmount(selectedInvoice.balance_amount)}
-                  className="text-[10px] text-violet-400 font-semibold hover:underline"
+                  style={{ color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 600, alignSelf: 'flex-start', marginTop: '2px', cursor: 'pointer' }}
                 >
                   Pay outstanding balance
                 </button>
               </div>
 
               {/* Payment Date */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300">Payment Date</label>
+              <div className="form-group">
+                <label className="form-label">Payment Date</label>
                 <input
                   type="date"
                   required
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                  className="form-input"
                 />
               </div>
 
               {/* Payment Method */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300">Payment Method</label>
+              <div className="form-group">
+                <label className="form-label">Payment Method</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                  className="form-input"
                 >
                   <option value="bank_transfer">Bank Transfer</option>
                   <option value="upi">UPI / Net Banking</option>
@@ -1040,40 +1078,41 @@ export default function InvoicesDashboard() {
               </div>
 
               {/* Reference */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300">Transaction Reference # (Optional)</label>
+              <div className="form-group">
+                <label className="form-label">Transaction Reference # (Optional)</label>
                 <input
                   type="text"
                   placeholder="e.g. UTR / URN number, Cheque #, Txn ID"
                   value={paymentRef}
                   onChange={(e) => setPaymentRef(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500"
+                  className="form-input"
                 />
               </div>
 
               {/* Notes */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300">Internal Notes / Description (Optional)</label>
+              <div className="form-group">
+                <label className="form-label">Internal Notes / Description (Optional)</label>
                 <textarea
                   rows={3}
                   placeholder="Memo of transaction, received-by information, bank clearance detail"
                   value={paymentNotes}
                   onChange={(e) => setPaymentNotes(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-850 text-zinc-150 text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500 resize-none"
+                  className="form-input"
+                  style={{ resize: 'none' }}
                 />
               </div>
 
-              <div className="pt-4 border-t border-zinc-800 flex justify-end gap-3">
+              <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: 'auto' }}>
                 <button
                   type="button"
                   onClick={closePaymentDrawer}
-                  className="px-4 py-2 text-xs font-bold text-zinc-400 bg-zinc-850 hover:bg-zinc-800 rounded-lg transition"
+                  className="btn btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold text-zinc-100 bg-violet-650 hover:bg-violet-600 rounded-lg transition"
+                  className="btn btn-primary"
                 >
                   Submit Payment
                 </button>

@@ -51,15 +51,15 @@ export default function ProjectProfitabilityReport() {
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, string> = {
-      planning: 'bg-indigo-950/40 text-indigo-400 border-indigo-900/50',
-      active: 'bg-sky-950/40 text-sky-400 border-sky-900/50',
-      on_hold: 'bg-amber-950/40 text-amber-400 border-amber-900/50',
-      completed: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/50',
-      cancelled: 'bg-slate-950/40 text-slate-400 border-slate-900/50',
+      planning: 'badge-info',
+      active: 'badge-accent',
+      on_hold: 'badge-warning',
+      completed: 'badge-success',
+      cancelled: 'badge-danger',
     };
-    const classes = map[status] || 'bg-slate-950/40 text-slate-400 border-slate-900/50';
+    const badgeClass = map[status] || 'badge-muted';
     return (
-      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${classes}`}>
+      <span className={`badge ${badgeClass}`}>
         {status.toUpperCase().replace('_', ' ')}
       </span>
     );
@@ -126,7 +126,7 @@ export default function ProjectProfitabilityReport() {
       render: (val: any) => {
         const pct = Number(val);
         return (
-          <span className={`font-mono font-bold ${pct >= 0 ? 'text-emerald-450' : 'text-rose-500'}`}>
+          <span className={`font-mono font-bold ${pct >= 0 ? 'text-emerald-455' : 'text-rose-500'}`}>
             {pct}%
           </span>
         );
@@ -149,9 +149,9 @@ export default function ProjectProfitabilityReport() {
       error={error ? (error as any).message : null}
     >
       {data && (
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
             <KpiCard
               title="Active Projects"
               value={data.summary.project_count}
@@ -191,8 +191,8 @@ export default function ProjectProfitabilityReport() {
           </div>
 
           {/* Project Breakdown Table */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Per-Project Profitability Breakdown</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Per-Project Profitability Breakdown</h3>
             <ReportTable columns={columns} data={data.breakdown} />
           </div>
         </div>

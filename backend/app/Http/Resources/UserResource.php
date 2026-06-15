@@ -27,10 +27,12 @@ class UserResource extends JsonResource
                 : null,
             'status'      => $this->status,
 
-            // Roles: array of role name strings
-            'roles' => $this->whenLoaded('roles', function () {
-                return $this->roles->pluck('name')->values()->toArray();
-            }, fn () => $this->getRoleNames()->toArray()),
+            // Roles: array of role objects
+            'roles' => $this->roles->map(fn($role) => [
+                'id'           => $role->id,
+                'name'         => $role->name,
+                'display_name' => ucwords(str_replace('_', ' ', $role->name)),
+            ])->values()->toArray(),
 
             // All permission names (direct + via roles)
             'permissions' => $this->getAllPermissions()->pluck('name')->values()->toArray(),

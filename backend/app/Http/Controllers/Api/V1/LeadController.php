@@ -87,30 +87,34 @@ class LeadController extends Controller
     {
         $this->authorize('create', Lead::class);
 
+        // Normalize frontend field aliases → backend DB column names
+        $this->normalizeLeadPayload($request);
+
         $validated = $request->validate([
-            'company_name' => ['required', 'string', 'max:255'],
-            'website_url' => ['nullable', 'string', 'max:255'],
-            'whatsapp_number' => ['nullable', 'string', 'max:50'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'timezone' => ['nullable', 'string', 'max:50'],
-            'lead_source_id' => ['nullable', 'integer', 'exists:lead_sources,id'],
-            'stage_id' => ['nullable', 'integer', 'exists:lead_stages,id'],
-            'sales_exec_id' => ['nullable', 'integer', 'exists:users,id'],
-            'sales_head_id' => ['nullable', 'integer', 'exists:users,id'],
-            'priority' => ['required', 'string', 'in:low,medium,high,urgent'],
-            'temperature' => ['required', 'string', 'in:warm,hot,cold'],
+            'company_name'             => ['required', 'string', 'max:255'],
+            'website_url'              => ['nullable', 'string', 'max:255'],
+            'whatsapp_number'          => ['nullable', 'string', 'max:50'],
+            'city'                     => ['nullable', 'string', 'max:100'],
+            'country'                  => ['nullable', 'string', 'max:100'],
+            'timezone'                 => ['nullable', 'string', 'max:50'],
+            'lead_source_id'           => ['nullable', 'integer', 'exists:lead_sources,id'],
+            'stage_id'                 => ['nullable', 'integer', 'exists:lead_stages,id'],
+            'sales_exec_id'            => ['nullable', 'integer', 'exists:users,id'],
+            'sales_head_id'            => ['nullable', 'integer', 'exists:users,id'],
+            'priority'                 => ['required', 'string', 'in:low,medium,high,urgent'],
+            'temperature'              => ['required', 'string', 'in:warm,hot,cold'],
             'estimated_monthly_budget' => ['nullable', 'numeric', 'min:0'],
-            'expected_start_date' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string'],
-            'contacts' => ['nullable', 'array'],
-            'contacts.*.name' => ['required', 'string', 'max:255'],
-            'contacts.*.designation' => ['nullable', 'string', 'max:255'],
-            'contacts.*.email' => ['nullable', 'email', 'max:255'],
-            'contacts.*.phone' => ['nullable', 'string', 'max:50'],
-            'contacts.*.whatsapp' => ['nullable', 'string', 'max:50'],
-            'contacts.*.notes' => ['nullable', 'string'],
-            'interested_service_ids' => ['nullable', 'array'],
+            'expected_start_date'      => ['nullable', 'date'],
+            'notes'                    => ['nullable', 'string'],
+            'contacts'                 => ['nullable', 'array'],
+            'contacts.*.name'         => ['required_with:contacts', 'string', 'max:255'],
+            'contacts.*.designation'  => ['nullable', 'string', 'max:255'],
+            'contacts.*.email'        => ['nullable', 'email', 'max:255'],
+            'contacts.*.phone'        => ['nullable', 'string', 'max:50'],
+            'contacts.*.whatsapp'     => ['nullable', 'string', 'max:50'],
+            'contacts.*.notes'        => ['nullable', 'string'],
+            'contacts.*.is_primary'   => ['nullable', 'boolean'],
+            'interested_service_ids'  => ['nullable', 'array'],
             'interested_service_ids.*' => ['integer', 'exists:services,id'],
         ]);
 
@@ -118,11 +122,14 @@ class LeadController extends Controller
             /** @var Lead $lead */
             $lead = Lead::create($validated);
 
-            // Save contacts (first is primary)
+            // Save contacts — first entry is always primary if is_primary not set
             if (!empty($validated['contacts'])) {
                 foreach ($validated['contacts'] as $index => $contactData) {
+                    $isPrimary = isset($contactData['is_primary'])
+                        ? (bool) $contactData['is_primary']
+                        : $index === 0;
                     $lead->contacts()->create(array_merge($contactData, [
-                        'is_primary' => $index === 0,
+                        'is_primary' => $isPrimary,
                     ]));
                 }
             }
@@ -161,30 +168,34 @@ class LeadController extends Controller
     {
         $this->authorize('update', $lead);
 
+        // Normalize frontend field aliases → backend DB column names
+        $this->normalizeLeadPayload($request);
+
         $validated = $request->validate([
-            'company_name' => ['sometimes', 'required', 'string', 'max:255'],
-            'website_url' => ['nullable', 'string', 'max:255'],
-            'whatsapp_number' => ['nullable', 'string', 'max:50'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'timezone' => ['nullable', 'string', 'max:50'],
-            'lead_source_id' => ['nullable', 'integer', 'exists:lead_sources,id'],
-            'stage_id' => ['nullable', 'integer', 'exists:lead_stages,id'],
-            'sales_exec_id' => ['nullable', 'integer', 'exists:users,id'],
-            'sales_head_id' => ['nullable', 'integer', 'exists:users,id'],
-            'priority' => ['sometimes', 'required', 'string', 'in:low,medium,high,urgent'],
-            'temperature' => ['sometimes', 'required', 'string', 'in:warm,hot,cold'],
+            'company_name'             => ['sometimes', 'required', 'string', 'max:255'],
+            'website_url'              => ['nullable', 'string', 'max:255'],
+            'whatsapp_number'          => ['nullable', 'string', 'max:50'],
+            'city'                     => ['nullable', 'string', 'max:100'],
+            'country'                  => ['nullable', 'string', 'max:100'],
+            'timezone'                 => ['nullable', 'string', 'max:50'],
+            'lead_source_id'           => ['nullable', 'integer', 'exists:lead_sources,id'],
+            'stage_id'                 => ['nullable', 'integer', 'exists:lead_stages,id'],
+            'sales_exec_id'            => ['nullable', 'integer', 'exists:users,id'],
+            'sales_head_id'            => ['nullable', 'integer', 'exists:users,id'],
+            'priority'                 => ['sometimes', 'required', 'string', 'in:low,medium,high,urgent'],
+            'temperature'              => ['sometimes', 'required', 'string', 'in:warm,hot,cold'],
             'estimated_monthly_budget' => ['nullable', 'numeric', 'min:0'],
-            'expected_start_date' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string'],
-            'contacts' => ['nullable', 'array'],
-            'contacts.*.name' => ['required', 'string', 'max:255'],
-            'contacts.*.designation' => ['nullable', 'string', 'max:255'],
-            'contacts.*.email' => ['nullable', 'email', 'max:255'],
-            'contacts.*.phone' => ['nullable', 'string', 'max:50'],
-            'contacts.*.whatsapp' => ['nullable', 'string', 'max:50'],
-            'contacts.*.notes' => ['nullable', 'string'],
-            'interested_service_ids' => ['nullable', 'array'],
+            'expected_start_date'      => ['nullable', 'date'],
+            'notes'                    => ['nullable', 'string'],
+            'contacts'                 => ['nullable', 'array'],
+            'contacts.*.name'         => ['required_with:contacts', 'string', 'max:255'],
+            'contacts.*.designation'  => ['nullable', 'string', 'max:255'],
+            'contacts.*.email'        => ['nullable', 'email', 'max:255'],
+            'contacts.*.phone'        => ['nullable', 'string', 'max:50'],
+            'contacts.*.whatsapp'     => ['nullable', 'string', 'max:50'],
+            'contacts.*.notes'        => ['nullable', 'string'],
+            'contacts.*.is_primary'   => ['nullable', 'boolean'],
+            'interested_service_ids'  => ['nullable', 'array'],
             'interested_service_ids.*' => ['integer', 'exists:services,id'],
         ]);
 
@@ -195,8 +206,11 @@ class LeadController extends Controller
             if (isset($validated['contacts'])) {
                 $lead->contacts()->delete();
                 foreach ($validated['contacts'] as $index => $contactData) {
+                    $isPrimary = isset($contactData['is_primary'])
+                        ? (bool) $contactData['is_primary']
+                        : $index === 0;
                     $lead->contacts()->create(array_merge($contactData, [
-                        'is_primary' => $index === 0,
+                        'is_primary' => $isPrimary,
                     ]));
                 }
             }
@@ -317,9 +331,9 @@ class LeadController extends Controller
         $this->authorize('update', $lead);
 
         $validated = $request->validate([
-            'type' => ['required', 'string', 'max:50'],
+            'type'        => ['required', 'string', 'max:50'],
             'description' => ['required', 'string'],
-            'due_at' => ['nullable', 'date', 'after_or_equal:today'],
+            'due_at'      => ['nullable', 'date', 'after_or_equal:today'],
         ]);
 
         $currentUserId = auth()->id();
@@ -327,9 +341,9 @@ class LeadController extends Controller
         $activity = DB::transaction(function () use ($lead, $validated, $currentUserId) {
             // Create LeadActivity
             $activity = LeadActivity::create([
-                'lead_id' => $lead->id,
-                'user_id' => $currentUserId,
-                'type' => $validated['type'],
+                'lead_id'     => $lead->id,
+                'user_id'     => $currentUserId,
+                'type'        => $validated['type'],
                 'description' => $validated['description'],
                 'occurred_at' => now(),
             ]);
@@ -337,11 +351,11 @@ class LeadController extends Controller
             // If due_at is set, create a follow-up record
             if (!empty($validated['due_at'])) {
                 LeadFollowup::create([
-                    'lead_id' => $lead->id,
-                    'assigned_to' => $lead->sales_exec_id ?: $currentUserId,
-                    'created_by' => $currentUserId,
-                    'description' => "Follow-up scheduled: " . $validated['description'],
-                    'type' => $validated['type'],
+                    'lead_id'      => $lead->id,
+                    'assigned_to'  => $lead->sales_exec_id ?: $currentUserId,
+                    'created_by'   => $currentUserId,
+                    'description'  => 'Follow-up scheduled: ' . $validated['description'],
+                    'type'         => $validated['type'],
                     'scheduled_at' => $validated['due_at'],
                     'is_completed' => false,
                 ]);
@@ -350,9 +364,62 @@ class LeadController extends Controller
             return $activity;
         });
 
+        $activity->load('user');
+
         return response()->json([
-            'message' => 'Activity logged successfully.',
+            'message'     => 'Activity logged successfully.',
             'activity_id' => $activity->id,
+            'activity'    => [
+                'id'          => $activity->id,
+                'type'        => $activity->type,
+                'description' => $activity->description,
+                'occurred_at' => $activity->occurred_at?->toDateTimeString(),
+                'user'        => $activity->user ? ['id' => $activity->user->id, 'name' => $activity->user->name] : null,
+            ],
         ], 201);
+    }
+
+    /**
+     * Normalize frontend field name aliases to backend DB column names.
+     * This allows the frontend to send either format without breaking.
+     */
+    private function normalizeLeadPayload(Request $request): void
+    {
+        $data = $request->all();
+        $changed = false;
+
+        // source_id → lead_source_id
+        if (isset($data['source_id']) && !isset($data['lead_source_id'])) {
+            $data['lead_source_id'] = $data['source_id'];
+            $changed = true;
+        }
+
+        // budget → estimated_monthly_budget
+        if (isset($data['budget']) && !isset($data['estimated_monthly_budget'])) {
+            $data['estimated_monthly_budget'] = $data['budget'];
+            $changed = true;
+        }
+
+        // primary_contact + secondary_contacts → contacts[]
+        if (isset($data['primary_contact']) && !isset($data['contacts'])) {
+            $contacts = [];
+            $primary = $data['primary_contact'];
+            $primary['is_primary'] = true;
+            $contacts[] = $primary;
+
+            if (!empty($data['secondary_contacts']) && is_array($data['secondary_contacts'])) {
+                foreach ($data['secondary_contacts'] as $sc) {
+                    $sc['is_primary'] = false;
+                    $contacts[] = $sc;
+                }
+            }
+
+            $data['contacts'] = $contacts;
+            $changed = true;
+        }
+
+        if ($changed) {
+            $request->replace($data);
+        }
     }
 }

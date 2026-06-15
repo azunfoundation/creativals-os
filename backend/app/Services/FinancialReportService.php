@@ -226,7 +226,7 @@ class FinancialReportService
         // Calculate bonuses paid in range
         $bonusTotal = DB::table('bonuses')
             ->where('status', 'paid')
-            ->whereBetween('paid_at', [$from->toDateString(), $to->toDateString()])
+            ->whereBetween('effective_date', [$from->toDateString(), $to->toDateString()])
             ->sum('amount');
 
         $totalGross = (float) ($payrollStats->total_gross ?? 0.0);
@@ -259,9 +259,9 @@ class FinancialReportService
             ->join('currencies', 'payroll_runs.currency_id', '=', 'currencies.id')
             ->select(
                 'users.name as user_name',
-                DB::raw('sum(payroll_run_items.net_pay * currencies.exchange_rate_to_inr) as net_salary'),
+                DB::raw('sum(payroll_run_items.net_salary * currencies.exchange_rate_to_inr) as net_salary'),
                 DB::raw('sum(payroll_run_items.base_salary * currencies.exchange_rate_to_inr) as base_salary'),
-                DB::raw('sum(coalesce((select sum(amount) from bonuses where bonuses.user_id = users.id and bonuses.status = "paid" and bonuses.paid_at between "' . $from->toDateString() . '" and "' . $to->toDateString() . '"), 0)) as bonus_amount')
+                DB::raw('sum(coalesce((select sum(amount) from bonuses where bonuses.user_id = users.id and bonuses.status = "paid" and bonuses.effective_date between "' . $from->toDateString() . '" and "' . $to->toDateString() . '"), 0)) as bonus_amount')
             )
             ->whereNull('payroll_runs.deleted_at')
             ->whereIn('payroll_runs.status', ['approved', 'processed', 'paid'])
@@ -307,9 +307,62 @@ class FinancialReportService
             ->where('roles.name', 'client')
             ->where('model_has_roles.model_type', 'App\Models\User')
             ->whereNull('users.deleted_at')
-            ->select('users.id', 'users.name', 'users.email');
+            ->select('users.id', 'users.name', 'users.email', 'users.phone', 'users.status', 'users.is_client_portal_user');
 
         $clients = $clientsQuery->get();
+        $clientIds = $clients->pluck('id')->toArray();
+
+        // ── 1. Batch project stats ───────────────────────────────────────────
+        $projectsStatsMap = DB::table('projects')
+            ->select(
+                'client_id',
+                DB::raw('count(id) as total_projects'),
+                DB::raw('sum(case when status = "active" then 1 else 0 end) as active_projects'),
+                DB::raw('sum(case when status = "on_hold" then 1 else 0 end) as on_hold_projects'),
+                DB::raw('sum(case when status = "cancelled" then 1 else 0 end) as cancelled_projects')
+            )
+            ->whereIn('client_id', $clientIds)
+            ->whereNull('deleted_at')
+            ->groupBy('client_id')
+            ->get()
+            ->keyBy('client_id');
+
+        // ── 2. Batch invoices stats in date range ────────────────────────────
+        $invoiceStatsMap = DB::table('invoices')
+            ->select(
+                'client_id',
+                DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then total_amount * exchange_rate else 0 end) as total_billed'),
+                DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then paid_amount * exchange_rate else 0 end) as total_paid'),
+                DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then due_amount * exchange_rate else 0 end) as total_outstanding'),
+                DB::raw('max(issue_date) as last_invoice_date')
+            )
+            ->whereIn('client_id', $clientIds)
+            ->whereNull('deleted_at')
+            ->whereBetween('issue_date', [$from->toDateString(), $to->toDateString()])
+            ->groupBy('client_id')
+            ->get()
+            ->keyBy('client_id');
+
+        // ── 3. Batch global overdue count ──────────────────────────────────
+        $overdueInvoicesMap = DB::table('invoices')
+            ->select('client_id', DB::raw('count(id) as overdue_count'))
+            ->whereIn('client_id', $clientIds)
+            ->whereNull('deleted_at')
+            ->where('status', 'overdue')
+            ->groupBy('client_id')
+            ->get()
+            ->keyBy('client_id');
+
+        // ── 4. Batch last payment date ───────────────────────────────────────
+        $lastPaymentMap = DB::table('payments')
+            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+            ->select('invoices.client_id', DB::raw('max(payments.payment_date) as last_payment_date'))
+            ->whereIn('invoices.client_id', $clientIds)
+            ->whereNull('payments.deleted_at')
+            ->whereBetween('payments.payment_date', [$from->toDateString(), $to->toDateString()])
+            ->groupBy('invoices.client_id')
+            ->get()
+            ->keyBy('client_id');
 
         $breakdown = [];
         $totalBilledAll = 0.0;
@@ -318,57 +371,56 @@ class FinancialReportService
         $activeClientsCount = 0;
 
         foreach ($clients as $client) {
-            // Projects counts
-            $projectsStats = DB::table('projects')
-                ->select(
-                    DB::raw('count(id) as total_projects'),
-                    DB::raw('sum(case when status = "active" then 1 else 0 end) as active_projects')
-                )
-                ->where('client_id', $client->id)
-                ->whereNull('deleted_at')
-                ->first();
+            $cId = $client->id;
 
-            $totalProjects = (int) ($projectsStats->total_projects ?? 0);
-            $activeProjects = (int) ($projectsStats->active_projects ?? 0);
+            // Resolve project stats
+            $projStats = $projectsStatsMap->get($cId);
+            $totalProjects = (int) ($projStats->total_projects ?? 0);
+            $activeProjects = (int) ($projStats->active_projects ?? 0);
+            $onHoldProjects = (int) ($projStats->on_hold_projects ?? 0);
+            $cancelledProjects = (int) ($projStats->cancelled_projects ?? 0);
 
             if ($activeProjects > 0) {
                 $activeClientsCount++;
             }
 
-            // Invoices and payment stats
-            $invoiceStats = DB::table('invoices')
-                ->select(
-                    DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then total_amount * exchange_rate else 0 end) as total_billed'),
-                    DB::raw('sum(paid_amount * exchange_rate) as total_paid'),
-                    DB::raw('sum(due_amount * exchange_rate) as total_outstanding'),
-                    DB::raw('max(issue_date) as last_invoice_date')
-                )
-                ->where('client_id', $client->id)
-                ->whereNull('deleted_at')
-                ->whereBetween('issue_date', [$from->toDateString(), $to->toDateString()])
-                ->first();
+            // Resolve invoice stats
+            $invStats = $invoiceStatsMap->get($cId);
+            $totalBilled = (float) ($invStats->total_billed ?? 0.0);
+            $totalPaid = (float) ($invStats->total_paid ?? 0.0);
+            $totalOutstanding = (float) ($invStats->total_outstanding ?? 0.0);
+            $lastInvoiceDate = $invStats ? $invStats->last_invoice_date : null;
 
-            $totalBilled = (float) ($invoiceStats->total_billed ?? 0.0);
-            $totalPaid = (float) ($invoiceStats->total_paid ?? 0.0);
-            $totalOutstanding = (float) ($invoiceStats->total_outstanding ?? 0.0);
-            $lastInvoiceDate = $invoiceStats->last_invoice_date;
-
-            // Last payment date
-            $lastPaymentDate = DB::table('payments')
-                ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
-                ->where('invoices.client_id', $client->id)
-                ->whereNull('payments.deleted_at')
-                ->whereBetween('payments.payment_date', [$from->toDateString(), $to->toDateString()])
-                ->max('payments.payment_date');
+            // Resolve last payment date
+            $payStats = $lastPaymentMap->get($cId);
+            $lastPaymentDate = $payStats ? $payStats->last_payment_date : null;
 
             $totalBilledAll += $totalBilled;
             $totalPaidAll += $totalPaid;
             $totalOutstandingAll += $totalOutstanding;
 
+            // Resolve overdue count
+            $overdueStats = $overdueInvoicesMap->get($cId);
+            $overdueInvoicesCount = (int) ($overdueStats->overdue_count ?? 0);
+
+            // Health Score calculation
+            $healthScore = 100;
+            $healthScore -= ($overdueInvoicesCount * 10);
+            $healthScore -= ($onHoldProjects * 15);
+            $healthScore -= ($cancelledProjects * 30);
+            if ($totalBilled > 0) {
+                $healthScore -= (int) round(($totalOutstanding / $totalBilled) * 20);
+            }
+            $healthScore = max(0, min(100, (int) $healthScore));
+
             $breakdown[] = [
-                'client_id' => $client->id,
+                'client_id' => $cId,
                 'client_name' => $client->name,
                 'client_email' => $client->email,
+                'phone' => $client->phone,
+                'status' => $client->status,
+                'is_client_portal_user' => (bool) $client->is_client_portal_user,
+                'health_score' => $healthScore,
                 'active_projects' => $activeProjects,
                 'total_projects' => $totalProjects,
                 'total_billed' => round($totalBilled, 2),

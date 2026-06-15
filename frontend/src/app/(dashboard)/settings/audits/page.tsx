@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useToast } from '@/hooks/useToast';
 import { useQuery } from '@tanstack/react-query';
 import { 
   FileSpreadsheet, Search, Filter, Calendar, Eye, 
@@ -95,6 +98,7 @@ const EVENT_OPTIONS = [
 ];
 
 export default function AuditLogsPage() {
+  const { showToast } = useToast();
   const [page, setPage] = useState(1);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
@@ -156,7 +160,7 @@ export default function AuditLogsPage() {
       link.click();
       link.remove();
     } catch {
-      alert('CSV Export failed or bypassed (offline).');
+      showToast('CSV Export failed or bypassed (offline).', 'info');
     }
   };
 

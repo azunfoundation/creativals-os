@@ -169,7 +169,7 @@ export default function PortalProjectDetail() {
           </button>
           <span style={{ color: 'var(--border)' }}>/</span>
           <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.9rem' }}>{project.name}</span>
-          {user && <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.8rem' }}>👋 {user.name}</span>}
+          {user && <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}><User size={13} /> {user.name}</span>}
         </div>
       </header>
 
@@ -255,7 +255,15 @@ export default function PortalProjectDetail() {
                 color:      activeTab === tab ? '#fff'    : 'var(--text-secondary)',
               }}
             >
-              {tab === 'milestones' ? '🏁 Milestones' : '📋 Tasks'}
+              {tab === 'milestones' ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
+                  <MilestoneIcon size={14} /> Milestones
+                </span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
+                  <Layers size={14} /> Tasks
+                </span>
+              )}
             </button>
           ))}
         </div>

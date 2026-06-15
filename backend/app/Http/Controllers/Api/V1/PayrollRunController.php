@@ -16,6 +16,11 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\PayslipMail;
+use App\Models\NotificationPreference;
+use App\Services\PdfService;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class PayrollRunController extends Controller
 {
@@ -122,7 +127,15 @@ class PayrollRunController extends Controller
                     ]);
                 }
 
-                $deductions = 0.00;
+                $tdsPercent = (float) ($comp?->tds_percent ?? 0.00);
+                $pfPercent = (float) ($comp?->pf_percent ?? 0.00);
+                $esiPercent = (float) ($comp?->esi_percent ?? 0.00);
+
+                $tdsAmount = round($baseSalary * ($tdsPercent / 100), 2);
+                $pfAmount = round($baseSalary * ($pfPercent / 100), 2);
+                $esiAmount = round($baseSalary * ($esiPercent / 100), 2);
+
+                $deductions = $tdsAmount + $pfAmount + $esiAmount;
                 $netSalary = $baseSalary + $bonusAmount - $deductions;
 
                 $expectedHours = (float) ($comp?->expected_monthly_hours ?? 0.00);
@@ -134,6 +147,9 @@ class PayrollRunController extends Controller
                     'hourly_rate' => $hourlyRate,
                     'hours_logged' => $hoursLogged,
                     'expected_hours' => $expectedHours,
+                    'tds' => $tdsAmount,
+                    'pf' => $pfAmount,
+                    'esi' => $esiAmount,
                 ];
 
                 PayrollRunItem::create([
@@ -175,7 +191,7 @@ class PayrollRunController extends Controller
         return response()->json($payrollRun->load(['submitter', 'approver', 'currency', 'items.user', 'items.adjustments']));
     }
 
-    public function approve(Request $request, PayrollRun $payrollRun): JsonResponse
+    public function approve(Request $request, PayrollRun $payrollRun, PdfService $pdfService): JsonResponse
     {
         if (!Gate::allows('approve', $payrollRun)) {
             return response()->json(['message' => 'This action is unauthorized.'], 403);
@@ -186,6 +202,24 @@ class PayrollRunController extends Controller
             'approved_by' => $request->user()->id,
             'approved_at' => now(),
         ]);
+
+        $payrollRun->load(['items.user', 'currency']);
+        foreach ($payrollRun->items as $item) {
+            $employee = $item->user;
+            if ($employee && $employee->email) {
+                $pref = NotificationPreference::where('user_id', $employee->id)
+                    ->where('event_type', 'payroll_processed')
+                    ->first();
+                if ($pref && $pref->email) {
+                    try {
+                        $pdfContent = $pdfService->generatePayslip($item)->output();
+                        Mail::to($employee->email)->send(new PayslipMail($employee, $item, $payrollRun, $pdfContent));
+                    } catch (\Throwable $e) {
+                        // Ignore mail errors
+                    }
+                }
+            }
+        }
 
         return response()->json([
             'message' => 'Payroll run approved successfully.',
@@ -265,5 +299,79 @@ class PayrollRunController extends Controller
         }
 
         return response()->json($result);
+    }
+
+    public function downloadPayslip(PayrollRunItem $item, PdfService $pdfService)
+    {
+        if (!Gate::allows('view', $item->payrollRun) && $item->user_id !== request()->user()->id) {
+            return response()->json(['message' => 'This action is unauthorized.'], 403);
+        }
+
+        $pdf = $pdfService->generatePayslip($item);
+        return $pdf->download("payslip_{$item->payrollRun->year}_{$item->payrollRun->month}.pdf");
+    }
+
+    public function export(Request $request, PayrollRun $payrollRun)
+    {
+        if (!Gate::allows('view', $payrollRun)) {
+            return response()->json(['message' => 'This action is unauthorized.'], 403);
+        }
+
+        $format = $request->query('format', 'csv');
+        $payrollRun->load(['items.user', 'currency']);
+
+        if ($format === 'pdf') {
+            $pdf = Pdf::loadView('pdf.payroll_export', ['run' => $payrollRun]);
+            return $pdf->download("payroll_{$payrollRun->year}_{$payrollRun->month}.pdf");
+        }
+
+        // CSV export
+        $headers = [
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=payroll_{$payrollRun->year}_{$payrollRun->month}.csv",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        $callback = function () use ($payrollRun) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['Employee', 'Base Salary', 'Bonus', 'Deductions', 'Net Salary']);
+
+            foreach ($payrollRun->items as $item) {
+                fputcsv($file, [
+                    $item->user->name,
+                    $item->base_salary,
+                    $item->bonus_amount,
+                    $item->deductions,
+                    $item->net_salary,
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    public function myHistory(Request $request): JsonResponse
+    {
+        $items = PayrollRunItem::with('payrollRun')
+            ->where('user_id', $request->user()->id)
+            ->whereHas('payrollRun', function ($q) {
+                $q->where('status', 'approved');
+            })
+            ->orderBy(
+                PayrollRun::select('year')
+                    ->whereColumn('payroll_runs.id', 'payroll_run_items.payroll_run_id'),
+                'desc'
+            )
+            ->orderBy(
+                PayrollRun::select('month')
+                    ->whereColumn('payroll_runs.id', 'payroll_run_items.payroll_run_id'),
+                'desc'
+            )
+            ->paginate($request->integer('per_page', 15));
+
+        return response()->json($items);
     }
 }

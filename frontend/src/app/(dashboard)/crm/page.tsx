@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, Search, LayoutGrid, List, Filter, X, 
@@ -22,12 +25,12 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 // ============================================================
 
 const MOCK_LEAD_STAGES: LeadStage[] = [
-  { id: 1, name: 'New', slug: 'new', color: '#3b82f6', sort_order: 1, is_system: true },
-  { id: 2, name: 'Contacted', slug: 'contacted', color: '#f59e0b', sort_order: 2, is_system: true },
-  { id: 3, name: 'Proposal Sent', slug: 'proposal_sent', color: '#7c3aed', sort_order: 3, is_system: true },
-  { id: 4, name: 'Negotiating', slug: 'negotiating', color: '#ec4899', sort_order: 4, is_system: true },
+  { id: 1, name: 'Fresh Lead', slug: 'fresh-lead', color: '#3b82f6', sort_order: 1, is_system: true },
+  { id: 2, name: 'Warm Lead', slug: 'warm-lead', color: '#f59e0b', sort_order: 2, is_system: true },
+  { id: 3, name: 'Hot Lead', slug: 'hot-lead', color: '#ef4444', sort_order: 3, is_system: true },
+  { id: 4, name: 'Quote Sent', slug: 'quote-sent', color: '#7c3aed', sort_order: 4, is_system: true },
   { id: 5, name: 'Won', slug: 'won', color: '#10b981', sort_order: 5, is_system: true },
-  { id: 6, name: 'Lost', slug: 'lost', color: '#ef4444', sort_order: 6, is_system: true }
+  { id: 6, name: 'Lost', slug: 'lost', color: '#6b7280', sort_order: 6, is_system: true },
 ];
 
 const MOCK_LEAD_SOURCES: LeadSource[] = [
@@ -38,118 +41,9 @@ const MOCK_LEAD_SOURCES: LeadSource[] = [
   { id: 5, name: 'Partner', slug: 'partner', color: '#7c3aed', icon: 'handshake' }
 ];
 
-const MOCK_LEADS: Lead[] = [
-  {
-    id: 1,
-    company_name: 'Acme Corp',
-    website_url: 'https://acme.com',
-    timezone: 'Asia/Kolkata',
-    expected_start_date: '2026-07-01',
-    priority: 'high',
-    temperature: 'hot',
-    budget: 850000,
-    interested_services: ['UI/UX Design', 'Web Development'],
-    stage_id: 1,
-    source_id: 1,
-    sales_exec_id: 1,
-    sales_head_id: 1,
-    contacts: [
-      { id: 1, lead_id: 1, name: 'John Doe', designation: 'CEO', email: 'john@acme.com', phone: '+91 99999 88888', whatsapp: '+91 99999 88888', notes: 'Prefers WhatsApp updates.', is_primary: true }
-    ],
-    activities: [],
-    created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 3 * 86400000).toISOString()
-  },
-  {
-    id: 2,
-    company_name: 'Stark Industries',
-    website_url: 'https://stark.com',
-    timezone: 'America/New_York',
-    expected_start_date: '2026-08-15',
-    priority: 'urgent',
-    temperature: 'hot',
-    budget: 2500000,
-    interested_services: ['Brand Identity', 'Web Development', 'Mobile App Development'],
-    stage_id: 3,
-    source_id: 2,
-    sales_exec_id: 2,
-    sales_head_id: 1,
-    contacts: [
-      { id: 2, lead_id: 2, name: 'Pepper Potts', designation: 'COO', email: 'pepper@stark.com', phone: '+1 555 123 4567', whatsapp: '+1 555 123 4567', notes: 'Very strict timeline.', is_primary: true }
-    ],
-    activities: [],
-    created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 1 * 86400000).toISOString()
-  },
-  {
-    id: 3,
-    company_name: 'Wayne Enterprises',
-    website_url: 'https://wayne.corp',
-    timezone: 'America/New_York',
-    expected_start_date: '2026-09-01',
-    priority: 'medium',
-    temperature: 'warm',
-    budget: 1200000,
-    interested_services: ['UI/UX Design', 'Performance Marketing'],
-    stage_id: 2,
-    source_id: 4,
-    sales_exec_id: 3,
-    sales_head_id: 1,
-    contacts: [
-      { id: 3, lead_id: 3, name: 'Lucius Fox', designation: 'VP Technology', email: 'lucius@wayne.corp', phone: '+1 555 987 6543', whatsapp: '', notes: 'Prefers formal email communication.', is_primary: true }
-    ],
-    activities: [],
-    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 86400000).toISOString()
-  },
-  {
-    id: 4,
-    company_name: 'Hooli Inc',
-    website_url: 'https://hooli.xyz',
-    timezone: 'America/Los_Angeles',
-    expected_start_date: '2026-06-25',
-    priority: 'low',
-    temperature: 'cold',
-    budget: 350000,
-    interested_services: ['SEO Optimization'],
-    stage_id: 6,
-    source_id: 3,
-    sales_exec_id: 1,
-    sales_head_id: 1,
-    contacts: [
-      { id: 4, lead_id: 4, name: 'Gavin Belson', designation: 'Founder', email: 'gavin@hooli.xyz', phone: '+1 555 444 3333', whatsapp: '', notes: 'Lost due to budget mismatch.', is_primary: true }
-    ],
-    activities: [],
-    created_at: new Date(Date.now() - 15 * 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 5 * 86400000).toISOString()
-  },
-  {
-    id: 5,
-    company_name: 'Initech',
-    website_url: 'https://initech.biz',
-    timezone: 'America/Chicago',
-    expected_start_date: '2026-07-20',
-    priority: 'medium',
-    temperature: 'warm',
-    budget: 950000,
-    interested_services: ['Web Development', 'SEO Optimization'],
-    stage_id: 5,
-    source_id: 1,
-    sales_exec_id: 2,
-    sales_head_id: 1,
-    contacts: [
-      { id: 5, lead_id: 5, name: 'Peter Gibbons', designation: 'Project Lead', email: 'peter@initech.biz', phone: '+1 555 222 1111', whatsapp: '', notes: 'Successfully signed contracts.', is_primary: true }
-    ],
-    activities: [],
-    created_at: new Date(Date.now() - 12 * 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 1 * 86400000).toISOString()
-  }
-];
-
 const MOCK_USERS: User[] = [
   { id: 1, name: 'Amit Verma', email: 'amit@creativals.in', employee_id: 'CRE010', roles: [], departments: [], status: 'active', permissions: [], avatar_url: null },
   { id: 2, name: 'Rohan Mehta', email: 'rohan@creativals.in', employee_id: 'CRE011', roles: [], departments: [], status: 'active', permissions: [], avatar_url: null },
-  { id: 3, name: 'Sarah Dsouza', email: 'sarah@creativals.in', employee_id: 'CRE012', roles: [], departments: [], status: 'active', permissions: [], avatar_url: null }
 ];
 
 const INTERESTED_SERVICES_OPTIONS = [
@@ -172,15 +66,36 @@ const TIMEZONES = [
 ];
 
 // ============================================================
+// Helper: safely get budget from lead (handles both field names)
+// ============================================================
+function getLeadBudget(lead: Lead): number {
+  const raw = (lead as any).estimated_monthly_budget ?? (lead as any).budget ?? 0;
+  const num = Number(raw);
+  return isNaN(num) ? 0 : num;
+}
+
+// ============================================================
 // Page Component
 // ============================================================
 
 export default function LeadsPage() {
+  const { confirm, prompt } = useModal();
   const queryClient = useQueryClient();
 
   // Layout and view states
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') === 'true') {
+        setShowCreateModal(true);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+    }
+  }, []);
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -196,7 +111,7 @@ export default function LeadsPage() {
   const [dragOverStageId, setDragOverStageId] = useState<number | null>(null);
 
   // Sorting state for List view
-  const [sortField, setSortField] = useState<keyof Lead>('company_name');
+  const [sortField, setSortField] = useState<string>('company_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // ============================================================
@@ -208,7 +123,9 @@ export default function LeadsPage() {
     queryFn: async () => {
       try {
         const res = await stagesApi.list();
-        return res.data;
+        // Handle both {data: [...]} and direct array responses
+        const d = (res as any).data;
+        return Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : MOCK_LEAD_STAGES);
       } catch {
         return MOCK_LEAD_STAGES;
       }
@@ -220,7 +137,8 @@ export default function LeadsPage() {
     queryFn: async () => {
       try {
         const res = await sourcesApi.list();
-        return res.data;
+        const d = (res as any).data;
+        return Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : MOCK_LEAD_SOURCES);
       } catch {
         return MOCK_LEAD_SOURCES;
       }
@@ -232,7 +150,7 @@ export default function LeadsPage() {
     queryFn: async () => {
       try {
         const res = await usersApi.list({ per_page: 100 });
-        return res.data.data;
+        return (res as any).data?.data ?? (res as any).data ?? MOCK_USERS;
       } catch {
         return MOCK_USERS;
       }
@@ -243,10 +161,15 @@ export default function LeadsPage() {
     queryKey: ['leads'],
     queryFn: async () => {
       try {
-        const res = await leadsApi.list();
-        return res.data.data;
+        const res = await leadsApi.list({ per_page: 500 });
+        // The axios interceptor keeps the envelope for paginated responses
+        // so res.data.data is the array of leads
+        const d = (res as any).data;
+        if (Array.isArray(d?.data)) return d.data;
+        if (Array.isArray(d)) return d;
+        return [];
       } catch {
-        return MOCK_LEADS;
+        return [];
       }
     }
   });
@@ -269,7 +192,7 @@ export default function LeadsPage() {
       }
       return { previousLeads };
     },
-    onError: (err, newTodo, context) => {
+    onError: (_err, _newTodo, context) => {
       if (context?.previousLeads) {
         queryClient.setQueryData(['leads'], context.previousLeads);
       }
@@ -315,7 +238,7 @@ export default function LeadsPage() {
     setDragOverStageId(null);
   };
 
-  const toggleSort = (field: keyof Lead) => {
+  const toggleSort = (field: string) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -325,16 +248,19 @@ export default function LeadsPage() {
   };
 
   // Resolve Stage/Source/Sales names for UI
-  const getStageObj = (stageId: number) => stages.find((s) => s.id === stageId);
-  const getSourceObj = (sourceId: number) => sources.find((s) => s.id === sourceId);
-  const getUserObj = (userId?: number) => users.find((u) => u.id === userId);
+  // The API returns stage_id and source_id as top-level numbers
+  const getStageObj = (stageId?: number | null) => stages.find((s) => s.id === stageId);
+  const getSourceObj = (sourceId?: number | null) => sources.find((s) => s.id === sourceId);
+  const getUserObj = (userId?: number | null) => users.find((u) => u.id === userId);
 
   const enrichedLeads = leads.map((lead) => ({
     ...lead,
-    stage: getStageObj(lead.stage_id),
-    source: getSourceObj(lead.source_id),
-    sales_exec: getUserObj(lead.sales_exec_id),
-    sales_head: getUserObj(lead.sales_head_id)
+    // Normalise: the resource now returns both stage/lead_stage; use whichever is present
+    _stageObj: (lead as any).stage ?? (lead as any).lead_stage ?? getStageObj(lead.stage_id),
+    _sourceObj: (lead as any).source ?? (lead as any).lead_source ?? getSourceObj((lead as any).source_id ?? (lead as any).lead_source_id),
+    _salesExec: (lead as any).sales_exec ?? getUserObj(lead.sales_exec_id),
+    _salesHead: (lead as any).sales_head ?? getUserObj(lead.sales_head_id),
+    _budget: getLeadBudget(lead),
   }));
 
   // Filtering leads
@@ -342,20 +268,23 @@ export default function LeadsPage() {
     // Search match
     if (searchQuery) {
       const companyMatch = lead.company_name.toLowerCase().includes(searchQuery.toLowerCase());
-      const contactMatch = lead.contacts.some(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      const contactMatch = (lead.contacts ?? []).some((c: any) => c.name?.toLowerCase().includes(searchQuery.toLowerCase()));
       if (!companyMatch && !contactMatch) return false;
     }
 
+    const leadStageId = lead.stage_id ?? (lead as any)._stageObj?.id;
+    const leadSourceId = (lead as any).source_id ?? (lead as any).lead_source_id ?? (lead as any)._sourceObj?.id;
+
     // Filter match
-    if (stageFilter && lead.stage_id !== parseInt(stageFilter)) return false;
-    if (sourceFilter && lead.source_id !== parseInt(sourceFilter)) return false;
+    if (stageFilter && leadStageId !== parseInt(stageFilter)) return false;
+    if (sourceFilter && leadSourceId !== parseInt(sourceFilter)) return false;
     if (execFilter && lead.sales_exec_id !== parseInt(execFilter)) return false;
     if (priorityFilter && lead.priority !== priorityFilter) return false;
     if (tempFilter && lead.temperature !== tempFilter) return false;
 
     // Budget Filter
     if (budgetRangeFilter) {
-      const val = lead.budget;
+      const val = lead._budget;
       if (budgetRangeFilter === 'under_1l' && val >= 100000) return false;
       if (budgetRangeFilter === '1l_5l' && (val < 100000 || val > 500000)) return false;
       if (budgetRangeFilter === '5l_15l' && (val < 500000 || val > 1500000)) return false;
@@ -367,11 +296,11 @@ export default function LeadsPage() {
 
   // Sorting
   const sortedLeads = [...filteredLeads].sort((a, b) => {
-    let valA = a[sortField];
-    let valB = b[sortField];
+    const valA = sortField === 'budget' ? a._budget : (a as any)[sortField];
+    const valB = sortField === 'budget' ? b._budget : (b as any)[sortField];
 
-    if (valA === undefined) return 1;
-    if (valB === undefined) return -1;
+    if (valA === undefined || valA === null) return 1;
+    if (valB === undefined || valB === null) return -1;
 
     if (typeof valA === 'string' && typeof valB === 'string') {
       return sortOrder === 'asc' 
@@ -391,13 +320,25 @@ export default function LeadsPage() {
   // ============================================================
 
   const totalLeads = leads.length;
-  const newCount = leads.filter((l) => getStageObj(l.stage_id)?.slug === 'new').length;
+
+  // Use stage slug-based matching — the resource now returns slug in the stage object
+  const getLeadStageSlug = (lead: Lead): string => {
+    const stageObj = (lead as any).stage ?? (lead as any).lead_stage ?? getStageObj(lead.stage_id);
+    return stageObj?.slug ?? '';
+  };
+
+  const newCount = leads.filter((l) => {
+    const slug = getLeadStageSlug(l);
+    return slug === 'fresh-lead' || slug === 'new';
+  }).length;
   const warmCount = leads.filter((l) => l.temperature === 'warm').length;
   const hotCount = leads.filter((l) => l.temperature === 'hot').length;
-  const wonCount = leads.filter((l) => getStageObj(l.stage_id)?.slug === 'won').length;
-  const lostCount = leads.filter((l) => getStageObj(l.stage_id)?.slug === 'lost').length;
+  const wonCount = leads.filter((l) => getLeadStageSlug(l) === 'won').length;
+  const lostCount = leads.filter((l) => getLeadStageSlug(l) === 'lost').length;
   const conversionRate = totalLeads > 0 ? Math.round((wonCount / totalLeads) * 100) : 0;
-  const wonBudgets = leads.filter((l) => getStageObj(l.stage_id)?.slug === 'won').reduce((sum, l) => sum + l.budget, 0);
+  const wonBudgets = leads
+    .filter((l) => getLeadStageSlug(l) === 'won')
+    .reduce((sum, l) => sum + getLeadBudget(l), 0);
   const avgValue = wonCount > 0 ? Math.round(wonBudgets / wonCount) : 0;
 
   return (
@@ -623,7 +564,11 @@ export default function LeadsPage() {
         
         <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '1rem', minHeight: 'calc(100vh - 360px)', alignItems: 'flex-start' }}>
           {stages.sort((a,b) => a.sort_order - b.sort_order).map((stage) => {
-            const stageLeads = filteredLeads.filter((l) => l.stage_id === stage.id);
+            // Match using stage_id from the lead (now reliably returned from API)
+            const stageLeads = filteredLeads.filter((l) => {
+              const lid = l.stage_id ?? (l as any)._stageObj?.id;
+              return lid === stage.id;
+            });
             const isOver = dragOverStageId === stage.id;
             return (
               <div
@@ -646,7 +591,7 @@ export default function LeadsPage() {
                 {/* Stage Header */}
                 <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: stage.color }} />
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: stage.color, display: 'inline-block' }} />
                     <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{stage.name}</span>
                   </div>
                   <span style={{ fontSize: '0.75rem', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: '9999px', padding: '1px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>
@@ -662,7 +607,8 @@ export default function LeadsPage() {
                     </div>
                   ) : (
                     stageLeads.map((lead) => {
-                      const primaryContact = lead.contacts.find((c) => c.is_primary);
+                      const contacts = lead.contacts ?? [];
+                      const primaryContact = contacts.find((c: any) => c.is_primary) ?? contacts[0];
                       let tempColor = 'badge-muted';
                       if (lead.temperature === 'warm') tempColor = 'badge-warning';
                       if (lead.temperature === 'hot') tempColor = 'badge-danger';
@@ -678,11 +624,10 @@ export default function LeadsPage() {
                             border: '1px solid var(--border)',
                             borderRadius: 'var(--radius-md)',
                             padding: '0.875rem',
-                            cursor: 'grab',
-                            transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+                            cursor: 'grab'
                           }}
                           onDragEnd={() => setDraggedLeadId(null)}
-                          className="hover:shadow-md hover:border-gray-500"
+                          className="crm-kanban-card"
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.375rem' }}>
                             <Link href={`/crm/${lead.id}`} style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', textDecoration: 'none' }} className="hover:text-accent flex items-center gap-1">
@@ -695,22 +640,22 @@ export default function LeadsPage() {
                           </div>
 
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.625rem' }}>
-                            Contact: {primaryContact?.name || '—'}
+                            Contact: {(primaryContact as any)?.name || '—'}
                           </div>
 
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginBottom: '0.75rem' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginBottom: '0.75rem', alignItems: 'center' }}>
                             <span className="badge badge-accent" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>{lead.priority}</span>
                             <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
-                              <DollarSign size={10} /> {formatCurrency(lead.budget)}
+                              {formatCurrency(lead._budget)}
                             </span>
                           </div>
 
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.5rem', marginTop: '0.25rem', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                              <Calendar size={11} /> {lead.expected_start_date ? formatDate(lead.expected_start_date) : 'No date'}
+                              <Calendar size={11} /> {lead.expected_start_date ? formatDate(lead.expected_start_date as string) : 'No date'}
                             </span>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                              <UserCheck size={11} /> {lead.sales_exec?.name.split(' ')[0] || 'Unassigned'}
+                              <UserCheck size={11} /> {lead._salesExec?.name?.split(' ')[0] ?? 'Unassigned'}
                             </span>
                           </div>
                         </div>
@@ -760,7 +705,8 @@ export default function LeadsPage() {
               </thead>
               <tbody>
                 {sortedLeads.map((lead) => {
-                  const primaryContact = lead.contacts.find(c => c.is_primary);
+                  const contacts = lead.contacts ?? [];
+                  const primaryContact = contacts.find((c: any) => c.is_primary) ?? contacts[0];
                   let tempClass = 'badge-muted';
                   if (lead.temperature === 'hot') tempClass = 'badge-danger';
                   if (lead.temperature === 'warm') tempClass = 'badge-warning';
@@ -780,8 +726,8 @@ export default function LeadsPage() {
                       </td>
                       <td>
                         <div>
-                          <div style={{ fontSize: '0.875rem' }}>{primaryContact?.name || '—'}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{primaryContact?.email || '—'}</div>
+                          <div style={{ fontSize: '0.875rem' }}>{(primaryContact as any)?.name || '—'}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(primaryContact as any)?.email || '—'}</div>
                         </div>
                       </td>
                       <td>
@@ -791,22 +737,22 @@ export default function LeadsPage() {
                         <span className="badge badge-accent">{lead.priority}</span>
                       </td>
                       <td style={{ fontWeight: 500, fontFamily: 'monospace' }}>
-                        {formatCurrency(lead.budget)}
+                        {formatCurrency(lead._budget)}
                       </td>
                       <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                        {lead.expected_start_date ? formatDate(lead.expected_start_date) : '—'}
+                        {lead.expected_start_date ? formatDate(lead.expected_start_date as string) : '—'}
                       </td>
                       <td>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.8125rem' }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: lead.stage?.color }} />
-                          {lead.stage?.name || '—'}
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: lead._stageObj?.color, display: 'inline-block' }} />
+                          {lead._stageObj?.name || '—'}
                         </span>
                       </td>
                       <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                        {lead.source?.name || '—'}
+                        {lead._sourceObj?.name || '—'}
                       </td>
                       <td style={{ fontSize: '0.8125rem' }}>
-                        {lead.sales_exec?.name || 'Unassigned'}
+                        {lead._salesExec?.name || 'Unassigned'}
                       </td>
                       <td>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px' }}>
@@ -814,8 +760,8 @@ export default function LeadsPage() {
                             <Eye size={13} />
                           </Link>
                           <button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this lead?')) {
+                            onClick={async () => {
+                              if (await confirm({ message: 'Are you sure you want to delete this lead?', variant: 'danger' })) {
                                 deleteLeadMutation.mutate(lead.id);
                               }
                             }}
@@ -864,6 +810,13 @@ export default function LeadsPage() {
               </button>
             </div>
 
+            {/* Error display */}
+            {createLeadMutation.isError && (
+              <div style={{ padding: '0.75rem 1.5rem', background: 'var(--danger-subtle)', borderBottom: '1px solid var(--danger)', color: 'var(--danger)', fontSize: '0.875rem' }}>
+                ⚠ Failed to create lead. Please check all required fields and try again.
+              </div>
+            )}
+
             {/* Modal Body (Scrollable form) */}
             <form
               onSubmit={(e) => {
@@ -876,6 +829,18 @@ export default function LeadsPage() {
                     selectedServices.push(s);
                   }
                 });
+
+                // Build primary contact object
+                const primaryContactName = formData.get('contact_name') as string;
+                const primaryContact = primaryContactName ? {
+                  name: primaryContactName,
+                  designation: formData.get('contact_designation') as string || '',
+                  email: formData.get('contact_email') as string || '',
+                  phone: formData.get('contact_phone') as string || '',
+                  whatsapp: formData.get('contact_whatsapp') as string || '',
+                  notes: formData.get('contact_notes') as string || '',
+                  is_primary: true,
+                } : null;
 
                 // Read secondary contacts
                 const secondaryContacts: any[] = [];
@@ -890,33 +855,40 @@ export default function LeadsPage() {
                       phone: formData.get(`sec_phone_${i}`) as string || '',
                       whatsapp: formData.get(`sec_whatsapp_${i}`) as string || '',
                       notes: formData.get(`sec_notes_${i}`) as string || '',
-                      is_primary: false
+                      is_primary: false,
                     });
                   }
                 }
 
-                const postData = {
+                // Build contacts array for backend
+                const contacts: any[] = [];
+                if (primaryContact) contacts.push(primaryContact);
+                secondaryContacts.forEach(sc => contacts.push(sc));
+
+                const budgetRaw = formData.get('budget') as string;
+                const budgetVal = parseFloat(budgetRaw) || 0;
+
+                const postData: any = {
                   company_name: formData.get('company_name') as string,
-                  website_url: formData.get('website_url') as string,
-                  budget: parseInt(formData.get('budget') as string || '0', 10),
+                  website_url: formData.get('website_url') as string || undefined,
+                  // Send BOTH field names so backend normalizer picks it up
+                  budget: budgetVal,
+                  estimated_monthly_budget: budgetVal,
                   timezone: formData.get('timezone') as string,
-                  expected_start_date: formData.get('expected_start_date') as string,
+                  expected_start_date: formData.get('expected_start_date') as string || undefined,
                   priority: formData.get('priority') as string,
                   temperature: formData.get('temperature') as string,
-                  source_id: parseInt(formData.get('source_id') as string || '1', 10),
-                  stage_id: parseInt(formData.get('stage_id') as string || '1', 10),
+                  // Send BOTH source field names
+                  source_id: parseInt(formData.get('source_id') as string || '0', 10) || undefined,
+                  lead_source_id: parseInt(formData.get('source_id') as string || '0', 10) || undefined,
+                  stage_id: parseInt(formData.get('stage_id') as string || '0', 10) || undefined,
                   sales_exec_id: formData.get('sales_exec_id') ? parseInt(formData.get('sales_exec_id') as string, 10) : undefined,
                   sales_head_id: formData.get('sales_head_id') ? parseInt(formData.get('sales_head_id') as string, 10) : undefined,
-                  interested_services: selectedServices,
-                  primary_contact: {
-                    name: formData.get('contact_name') as string,
-                    designation: formData.get('contact_designation') as string,
-                    email: formData.get('contact_email') as string,
-                    phone: formData.get('contact_phone') as string,
-                    whatsapp: formData.get('contact_whatsapp') as string,
-                    notes: formData.get('contact_notes') as string,
-                  },
-                  secondary_contacts: secondaryContacts
+                  // Contacts as array (backend normalizer also accepts primary_contact separately)
+                  contacts: contacts,
+                  primary_contact: primaryContact,
+                  secondary_contacts: secondaryContacts,
+                  notes: formData.get('notes') as string || undefined,
                 };
 
                 createLeadMutation.mutate(postData);
@@ -941,7 +913,7 @@ export default function LeadsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
                   <div className="form-group">
                     <label className="form-label">Budget (INR) *</label>
-                    <input required type="number" name="budget" className="form-input" placeholder="e.g. 1200000" />
+                    <input required type="number" name="budget" min="0" className="form-input" placeholder="e.g. 1200000" />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Timezone</label>
@@ -979,6 +951,7 @@ export default function LeadsPage() {
                   <div className="form-group">
                     <label className="form-label">Source *</label>
                     <select required name="source_id" className="form-input">
+                      <option value="">Select Source</option>
                       {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
@@ -986,8 +959,9 @@ export default function LeadsPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
                   <div className="form-group">
-                    <label className="form-label">Pipeline Stage *</label>
-                    <select required name="stage_id" className="form-input">
+                    <label className="form-label">Pipeline Stage</label>
+                    <select name="stage_id" className="form-input">
+                      <option value="">Select Stage</option>
                       {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
@@ -1000,12 +974,23 @@ export default function LeadsPage() {
                   </div>
                 </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Sales Head</label>
+                    <select name="sales_head_id" className="form-input">
+                      <option value="">Select Sales Head</option>
+                      {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">WhatsApp Number</label>
+                    <input type="text" name="whatsapp_number" className="form-input" placeholder="+91 99999 88888" />
+                  </div>
+                </div>
+
                 <div className="form-group">
-                  <label className="form-label">Sales Head</label>
-                  <select name="sales_head_id" className="form-input">
-                    <option value="">Select Sales Head</option>
-                    {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
+                  <label className="form-label">Notes</label>
+                  <textarea name="notes" rows={2} className="form-input" placeholder="Initial notes about this lead..." style={{ resize: 'none' }} />
                 </div>
               </div>
 
@@ -1027,8 +1012,8 @@ export default function LeadsPage() {
                 <h3 style={{ fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--accent)', letterSpacing: '0.04em' }}>3. Primary Contact</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
                   <div className="form-group">
-                    <label className="form-label">Contact Name *</label>
-                    <input required type="text" name="contact_name" className="form-input" placeholder="e.g. Richard Hendricks" />
+                    <label className="form-label">Contact Name</label>
+                    <input type="text" name="contact_name" className="form-input" placeholder="e.g. Richard Hendricks" />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Designation</label>

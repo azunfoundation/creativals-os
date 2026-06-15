@@ -5,6 +5,8 @@ import { ThemeProvider } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import './globals.css';
+import { ToastProvider } from '@/components/ui/Toast';
+import { ModalProvider } from '@/providers/ModalProvider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -40,7 +42,11 @@ export default function RootLayout({
           themes={['light', 'dark']}
         >
           <QueryClientProvider client={queryClient}>
-            {children}
+            <ToastProvider>
+              <ModalProvider>
+                {children}
+              </ModalProvider>
+            </ToastProvider>
           </QueryClientProvider>
         </ThemeProvider>
       </body>

@@ -20,7 +20,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-
+use Illuminate\Support\Facades\Mail;
+use App\Mail\InvoiceMail;
+use App\Services\PdfService;
 class InvoiceController extends Controller
 {
     /**
@@ -642,5 +644,53 @@ class InvoiceController extends Controller
 
         return (new InvoiceResource($invoice->load(['quote', 'client', 'creator', 'currency', 'coupon', 'items'])))
             ->additional(['message' => 'Invoice rejected successfully and reverted to draft.']);
+    }
+
+    /**
+     * Send invoice email to client.
+     */
+    public function sendMail(Request $request, int $id): JsonResponse
+    {
+        $invoice = Invoice::with(['client'])->findOrFail($id);
+
+        Gate::authorize('view', $invoice);
+
+        $recipientEmail = $invoice->client?->email;
+
+        if (!$recipientEmail) {
+            return response()->json([
+                'message' => 'Could not find a valid email address for the client.',
+            ], 422);
+        }
+
+        try {
+            $pdfService = app(PdfService::class);
+            $pdf = $pdfService->generateInvoicePdf($invoice);
+            
+            Mail::to($recipientEmail)->send(new InvoiceMail($invoice, $pdf->output()));
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Failed to send email. Please verify SMTP settings.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Invoice email sent to client successfully.',
+        ]);
+    }
+
+    /**
+     * Download invoice PDF.
+     */
+    public function downloadPdf(Request $request, int $id, PdfService $pdfService)
+    {
+        $invoice = Invoice::findOrFail($id);
+
+        Gate::authorize('view', $invoice);
+
+        $pdf = $pdfService->generateInvoicePdf($invoice);
+
+        return $pdf->download("invoice-{$invoice->invoice_number}.pdf");
     }
 }

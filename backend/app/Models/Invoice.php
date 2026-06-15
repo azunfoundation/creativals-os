@@ -43,6 +43,11 @@ class Invoice extends Model
         'terms_conditions',
         'client_notes',
         'internal_notes',
+        'is_recurring',
+        'recurring_interval',
+        'recurring_end_date',
+        'last_recurring_date',
+        'parent_invoice_id',
     ];
 
     /**
@@ -70,6 +75,10 @@ class Invoice extends Model
             'due_amount' => 'decimal:2',
             'issue_date' => 'date',
             'due_date' => 'date',
+            'is_recurring' => 'boolean',
+            'recurring_end_date' => 'date',
+            'last_recurring_date' => 'date',
+            'parent_invoice_id' => 'integer',
         ];
     }
 
@@ -179,6 +188,30 @@ class Invoice extends Model
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class, 'invoice_id');
+    }
+
+    /**
+     * Get the parent invoice if this was generated from a recurring invoice.
+     */
+    public function parentInvoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class, 'parent_invoice_id');
+    }
+
+    /**
+     * Get the child invoices generated from this recurring invoice.
+     */
+    public function childInvoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'parent_invoice_id');
+    }
+
+    /**
+     * Get credit notes for this invoice.
+     */
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class, 'invoice_id');
     }
 
     /**

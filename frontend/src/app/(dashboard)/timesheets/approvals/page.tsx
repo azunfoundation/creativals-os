@@ -1,6 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider'; 
+import { useToast } from '@/hooks/useToast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Check, X, AlertCircle, Clock, CheckCircle2, AlertOctagon,
@@ -115,6 +119,8 @@ const MOCK_SUBMITTED_TIMESHEETS: Timesheet[] = [
 ];
 
 export default function TimesheetApprovalsPage() {
+  const { confirm, prompt } = useModal();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   // Selection state for checkboxes
@@ -140,7 +146,12 @@ export default function TimesheetApprovalsPage() {
     queryFn: async () => {
       try {
         const res = await timesheetsApi.list();
-        return res.data.data;
+        const list = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
+        return list.map((t: any) => ({
+          ...t,
+          hours: parseFloat(t.hours_logged) || parseFloat(t.hours) || 0,
+          billable: t.is_billable !== undefined ? !!t.is_billable : (t.billable !== undefined ? !!t.billable : true)
+        }));
       } catch {
         return MOCK_SUBMITTED_TIMESHEETS;
       }
@@ -190,7 +201,7 @@ export default function TimesheetApprovalsPage() {
     onSuccess: () => {
       setSelectedIds([]);
       queryClient.invalidateQueries({ queryKey: ['allTimesheetsForApprovals'] });
-      alert('Selected entries approved successfully.');
+      showToast('Selected entries approved successfully.', 'info');
     }
   });
 
@@ -205,7 +216,7 @@ export default function TimesheetApprovalsPage() {
       setRejectionNotes('');
       setShowRejectModal(false);
       queryClient.invalidateQueries({ queryKey: ['allTimesheetsForApprovals'] });
-      alert('Selected entries rejected.');
+      showToast('Selected entries rejected.', 'info');
     }
   });
 
@@ -230,9 +241,9 @@ export default function TimesheetApprovalsPage() {
     );
   };
 
-  const handleBulkApprove = () => {
+  const handleBulkApprove = async () => {
     if (selectedIds.length === 0) return;
-    if (confirm(`Approve all ${selectedIds.length} selected timesheet logs?`)) {
+    if (await confirm({ message: `Approve all ${selectedIds.length} selected timesheet logs?`, variant: 'danger' })) {
       bulkApproveMutation.mutate(selectedIds);
     }
   };
@@ -243,17 +254,17 @@ export default function TimesheetApprovalsPage() {
     bulkRejectMutation.mutate({ ids: selectedIds, notes: rejectionNotes.trim() });
   };
 
-  const handleSingleApprove = (id: number) => {
-    if (confirm('Approve this timesheet entry?')) {
+  const handleSingleApprove = async (id: number) => {
+    if (await confirm({ message: 'Approve this timesheet entry?', variant: 'danger' })) {
       approveMutation.mutate(id);
     }
   };
 
-  const handleSingleReject = (id: number) => {
-    const notes = prompt('Enter reason for rejection:');
+  const handleSingleReject = async (id: number) => {
+    const notes = await prompt({ message: 'Enter reason for rejection:' });
     if (notes === null) return; // user cancelled prompt
     if (!notes.trim()) {
-      alert('Rejection notes are required.');
+      showToast('Rejection notes are required.', 'info');
       return;
     }
     rejectMutation.mutate({ id, notes: notes.trim() });
@@ -422,14 +433,14 @@ export default function TimesheetApprovalsPage() {
               className="btn btn-primary btn-sm"
               style={{ background: 'var(--success)', borderColor: 'var(--success)' }}
             >
-              <ThumbsUp size={12} style={{ marginRight: '4px' }} />
+              <ThumbsUp size={12} />
               Bulk Approve
             </button>
             <button
               onClick={() => setShowRejectModal(true)}
               className="btn btn-danger btn-sm"
             >
-              <ThumbsDown size={12} style={{ marginRight: '4px' }} />
+              <ThumbsDown size={12} />
               Bulk Reject
             </button>
           </div>

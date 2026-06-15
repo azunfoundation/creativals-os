@@ -123,4 +123,12 @@ class Project extends Model
             ->withPivot('lead_user_id')
             ->withTimestamps();
     }
+
+    /**
+     * @return HasMany<ProjectDocument, $this>
+     */
+    public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ProjectDocument::class);
+    }
 }

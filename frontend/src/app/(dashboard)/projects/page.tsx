@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Search, LayoutGrid, List, Filter, X,
@@ -116,19 +119,32 @@ const MOCK_PROJECTS: Project[] = [
 ];
 
 const STATUS_CONFIG = {
-  planning: { label: 'Planning', color: '#3b82f6', bg: 'var(--info-subtle)', borderLeft: 'border-l-blue-500' },
-  active: { label: 'Active', color: '#a855f7', bg: 'var(--accent-subtle)', borderLeft: 'border-l-purple-500' },
-  on_hold: { label: 'On Hold', color: '#f59e0b', bg: 'var(--warning-subtle)', borderLeft: 'border-l-orange-500' },
-  completed: { label: 'Completed', color: '#10b981', bg: 'var(--success-subtle)', borderLeft: 'border-l-green-500' },
-  cancelled: { label: 'Cancelled', color: '#ef4444', bg: 'var(--danger-subtle)', borderLeft: 'border-l-red-500' }
+  planning: { label: 'Planning', color: 'var(--info)', bg: 'var(--info-subtle)', borderLeft: 'border-l-blue-500' },
+  in_progress: { label: 'In Progress', color: 'var(--accent)', bg: 'var(--accent-subtle)', borderLeft: 'border-l-purple-500' },
+  active: { label: 'Active', color: 'var(--accent)', bg: 'var(--accent-subtle)', borderLeft: 'border-l-purple-500' },
+  on_hold: { label: 'On Hold', color: 'var(--warning)', bg: 'var(--warning-subtle)', borderLeft: 'border-l-orange-500' },
+  completed: { label: 'Completed', color: 'var(--success)', bg: 'var(--success-subtle)', borderLeft: 'border-l-green-500' },
+  cancelled: { label: 'Cancelled', color: 'var(--danger)', bg: 'var(--danger-subtle)', borderLeft: 'border-l-red-500' }
 };
 
 export default function ProjectsPage() {
+  const { confirm, prompt } = useModal();
   const queryClient = useQueryClient();
 
   // Layout states
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
   const [showDrawer, setShowDrawer] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') === 'true') {
+        setShowDrawer(true);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+    }
+  }, []);
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,12 +171,16 @@ export default function ProjectsPage() {
   // Queries
   // ============================================================
 
-  const { data: projectsData = [] } = useQuery<Project[]>({
+  const { data: projectsData = [], isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ['projects'],
     queryFn: async () => {
       try {
         const res = await projectsApi.list();
-        return res.data.data;
+        const data = res.data.data || [];
+        return data.map((p: any) => ({
+          ...p,
+          budget: p.budget_amount !== undefined ? parseFloat(p.budget_amount) : p.budget
+        }));
       } catch {
         return MOCK_PROJECTS;
       }
@@ -208,7 +228,7 @@ export default function ProjectsPage() {
     queryFn: async () => {
       try {
         const res = await departmentsApi.list();
-        return res.data;
+        return (res.data as any).data || [];
       } catch {
         return [];
       }
@@ -297,6 +317,7 @@ export default function ProjectsPage() {
       end_date: newEndDate,
       budget_hours: parseFloat(newBudgetHours) || 0,
       budget: parseFloat(newBudgetAmount) || 0,
+      budget_amount: parseFloat(newBudgetAmount) || 0,
       description: newDescription,
       status: 'planning',
       completion_percentage: 0
@@ -343,7 +364,7 @@ export default function ProjectsPage() {
 
   // KPI calculations
   const totalProjectsCount = projectsData.length;
-  const activeCount = projectsData.filter(p => p.status === 'active').length;
+  const activeCount = projectsData.filter(p => p.status === 'active' || p.status === 'in_progress').length;
   const completedCount = projectsData.filter(p => p.status === 'completed').length;
   const totalBudgetVal = projectsData.reduce((sum, p) => sum + (p.budget || 0), 0);
 
@@ -486,11 +507,13 @@ export default function ProjectsPage() {
       {/* ── Table View ── */}
       {viewMode === 'table' ? (
         <div className="data-table-wrap">
-          {filteredProjects.length === 0 ? (
-            <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-              <p style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>No projects found</p>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px' }}>Try adjusting your filters.</p>
-            </div>
+          {isLoadingProjects ? (
+            <SkeletonTable rows={5} cols={6} />
+          ) : filteredProjects.length === 0 ? (
+            <EmptyState
+              title="No projects found"
+              description="Create a new project or clear filters to see results."
+            />
           ) : (
             <table className="data-table">
               <thead>
@@ -564,9 +587,9 @@ export default function ProjectsPage() {
                             View Detail
                           </Link>
                           <button
-                            onClick={() => { if (confirm('Are you sure you want to delete this project?')) deleteProjectMutation.mutate(project.id); }}
-                            className="btn btn-danger btn-sm"
-                            style={{ padding: '0.375rem', background: 'none' }}
+                            onClick={async () => { if (await confirm({ message: 'Are you sure you want to delete this project?', variant: 'danger' })) deleteProjectMutation.mutate(project.id); }}
+                            className="btn btn-danger btn-sm btn-icon"
+                            style={{ padding: '0.375rem' }}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -583,7 +606,7 @@ export default function ProjectsPage() {
         
         // ── Board View (by Status) ──
         <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '1rem', minHeight: 'calc(100vh - 360px)', alignItems: 'flex-start' }}>
-          {(['planning', 'active', 'on_hold', 'completed', 'cancelled'] as Array<Project['status']>).map((statusKey) => {
+          {(['planning', 'in_progress', 'on_hold', 'completed', 'cancelled'] as Array<Project['status']>).map((statusKey) => {
             const statusCol = STATUS_CONFIG[statusKey];
             const colProjects = filteredProjects.filter(p => p.status === statusKey);
             const isOver = dragOverStatus === statusKey;
@@ -638,7 +661,7 @@ export default function ProjectsPage() {
                           cursor: 'grab',
                           transition: 'transform 0.15s ease, box-shadow 0.15s ease'
                         }}
-                        className="hover:shadow-md hover:border-gray-500"
+                        className="crm-kanban-card"
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.375rem' }}>
                           <Link href={`/projects/${project.id}`} style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', textDecoration: 'none' }} className="hover:text-accent flex items-center gap-1">

@@ -8,4 +8,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 use Illuminate\Support\Facades\Schedule;
-Schedule::command('creativals:generate-recurring-invoices')->daily();
+Schedule::command('invoices:process-recurring')->daily();
+Schedule::command('invoices:send-reminders')->daily();

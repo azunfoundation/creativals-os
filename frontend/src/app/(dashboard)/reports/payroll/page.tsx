@@ -70,11 +70,9 @@ export default function PayrollSummaryReport() {
       label: 'Status',
       align: 'center' as const,
       render: (val: any) => {
-        const classes = val === 'paid'
-          ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/50'
-          : 'bg-amber-950/40 text-amber-400 border-amber-900/50';
+        const badgeClass = val === 'paid' ? 'badge-success' : 'badge-warning';
         return (
-          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${classes}`}>
+          <span className={`badge ${badgeClass}`}>
             {String(val).toUpperCase()}
           </span>
         );
@@ -132,14 +130,14 @@ export default function PayrollSummaryReport() {
       error={error ? (error as any).message : null}
     >
       {data && (
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
             <KpiCard
               title="Payroll Runs"
               value={data.summary.run_count}
               subtext="Completed Payrolls"
-              icon={<ShieldCheck className="w-5 h-5 text-sky-450" />}
+              icon={<ShieldCheck className="w-5 h-5 text-sky-455" />}
             />
             <KpiCard
               title="Total Gross Outlay"
@@ -167,16 +165,16 @@ export default function PayrollSummaryReport() {
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.5rem' }}>
             {/* Left Column: Monthly Run History */}
-            <div className="lg:col-span-3 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Payroll Run Logs</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Payroll Run Logs</h3>
               <ReportTable columns={runColumns} data={data.by_month} />
             </div>
 
             {/* Right Column: Top Earners */}
-            <div className="lg:col-span-2 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Top Compensation Earners</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Top Compensation Earners</h3>
               <ReportTable columns={earnerColumns} data={data.top_earners} />
             </div>
           </div>

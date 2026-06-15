@@ -56,45 +56,53 @@ export default function ReportTable({ columns, data = [], pageSize = 10 }: Repor
   const paginatedData = sortedData.slice(startIndex, startIndex + pageSize);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex flex-col w-full">
-      <div className="overflow-x-auto w-full">
-        <table className="w-full text-xs text-left border-collapse">
+    <div className="data-table-wrap" style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+      <div style={{ overflowX: 'auto', width: '100%' }}>
+        <table className="data-table">
           <thead>
-            <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-semibold">
+            <tr>
               {columns.map((col) => (
                 <th
                   key={col.key}
                   onClick={() => col.sortable !== false && handleSort(col.key)}
-                  className={`px-4 py-3.5 select-none ${col.sortable !== false ? 'cursor-pointer hover:bg-slate-900/60 hover:text-white' : ''} ${
-                    col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
-                  }`}
+                  style={{
+                    cursor: col.sortable !== false ? 'pointer' : 'default',
+                    textAlign: col.align || 'left',
+                    userSelect: 'none'
+                  }}
                 >
-                  <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : 'justify-start'}`}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    justifyContent: col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'flex-start'
+                  }}>
                     <span>{col.label}</span>
-                    {col.sortable !== false && <ArrowUpDown className="w-3 h-3 opacity-60" />}
+                    {col.sortable !== false && <ArrowUpDown size={12} style={{ opacity: 0.6 }} />}
                   </div>
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-850/40 text-slate-300">
+          <tbody>
             {paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-slate-500 font-medium">
+                <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                   No records found
                 </td>
               </tr>
             ) : (
               paginatedData.map((row, rIdx) => (
-                <tr key={rIdx} className="hover:bg-slate-950/25 transition duration-150">
+                <tr key={rIdx}>
                   {columns.map((col) => {
                     const value = row[col.key];
                     return (
                       <td
                         key={col.key}
-                        className={`px-4 py-3 font-medium ${
-                          col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
-                        }`}
+                        style={{
+                          textAlign: col.align || 'left',
+                          fontSize: '0.8125rem'
+                        }}
                       >
                         {col.render ? col.render(value, row) : value !== null && value !== undefined ? String(value) : '-'}
                       </td>
@@ -109,30 +117,41 @@ export default function ReportTable({ columns, data = [], pageSize = 10 }: Repor
 
       {/* Pagination Footer */}
       {totalPages > 1 && (
-        <div className="bg-slate-950/20 border-t border-slate-800/80 px-4 py-3 flex items-center justify-between text-xs text-slate-400">
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '0.75rem 1rem',
+          borderTop: '1px solid var(--border)',
+          background: 'var(--surface-elevated)',
+          fontSize: '0.75rem',
+          color: 'var(--text-secondary)'
+        }}>
           <div>
-            Showing <span className="font-semibold text-slate-300">{startIndex + 1}</span> to{' '}
-            <span className="font-semibold text-slate-300">{Math.min(startIndex + pageSize, totalItems)}</span> of{' '}
-            <span className="font-semibold text-slate-300">{totalItems}</span> rows
+            Showing <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{startIndex + 1}</span> to{' '}
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{Math.min(startIndex + pageSize, totalItems)}</span> of{' '}
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{totalItems}</span> rows
           </div>
-          <div className="flex items-center gap-2">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <button
               onClick={() => setCurrentPage(currentPage - 1)}
               disabled={currentPage === 1}
-              className="p-1 rounded bg-slate-900 border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800 text-slate-300 cursor-pointer"
+              className="btn btn-secondary btn-sm btn-icon"
+              style={{ padding: '0.25rem' }}
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft size={14} />
             </button>
             <span>
-              Page <span className="font-semibold text-slate-300">{currentPage}</span> of{' '}
-              <span className="font-semibold text-slate-300">{totalPages}</span>
+              Page <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{currentPage}</span> of{' '}
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{totalPages}</span>
             </span>
             <button
               onClick={() => setCurrentPage(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="p-1 rounded bg-slate-900 border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800 text-slate-300 cursor-pointer"
+              className="btn btn-secondary btn-sm btn-icon"
+              style={{ padding: '0.25rem' }}
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight size={14} />
             </button>
           </div>
         </div>

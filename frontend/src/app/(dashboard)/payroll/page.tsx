@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider'; 
+import { useToast } from '@/hooks/useToast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Banknote, Calendar, ChevronRight, CheckCircle, Clock,
-  Plus, DollarSign, Users, Award, ShieldAlert, FileText, ArrowRight, X, TrendingUp
+  Plus, DollarSign, Users, Award, ShieldAlert, FileText, ArrowRight, X, TrendingUp, Download
 } from 'lucide-react';
 import {
   payroll as payrollApi,
@@ -186,6 +190,8 @@ const MONTH_NAMES = [
 ];
 
 export default function PayrollDashboard() {
+  const { confirm, prompt } = useModal();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
@@ -200,6 +206,17 @@ export default function PayrollDashboard() {
 
   // Modal states
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') === 'true') {
+        setShowGenerateModal(true);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+    }
+  }, []);
   const [formYear, setFormYear] = useState(2026);
   const [formMonth, setFormMonth] = useState(6);
   const [formNotes, setFormNotes] = useState('');
@@ -217,7 +234,7 @@ export default function PayrollDashboard() {
   // Queries
   // ============================================================
 
-  const { data: runs = localRuns } = useQuery<PayrollRun[]>({
+  const { data: runs = localRuns, isLoading: isLoadingRuns } = useQuery<PayrollRun[]>({
     queryKey: ['payroll-runs'],
     queryFn: async () => {
       try {
@@ -400,10 +417,10 @@ export default function PayrollDashboard() {
     });
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedRunId) return;
     const actionName = selectedRun?.status === 'draft' ? 'Approve' : 'Mark as Paid';
-    if (confirm(`Are you sure you want to ${actionName.toLowerCase()} payroll run ${selectedRun?.run_number}?`)) {
+    if (await confirm({ message: `Are you sure you want to ${actionName.toLowerCase()} payroll run ${selectedRun?.run_number}?`, variant: 'danger' })) {
       approveRunMutation.mutate({ id: selectedRunId, notes: 'Approved via Founders Dashboard.' });
     }
   };
@@ -474,17 +491,23 @@ export default function PayrollDashboard() {
       </div>
 
       {/* ── Main Panel Split ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '1.5rem', flex: 1, minHeight: 0 }} className="kpi-grid-6">
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '1.5rem', flex: 1, minHeight: 0 }}>
         
         {/* Left Side: Runs List */}
-        <div className="card flex flex-col gap-4" style={{ height: '100%', overflowY: 'auto' }}>
-          <div className="flex items-center justify-between border-b pb-2">
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', overflowY: 'auto' }}>
+          <div className="border-b" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '0.5rem' }}>
             <h3 className="font-semibold text-sm">Payroll Run Registry</h3>
             <span className="badge badge-muted">{runs.length} Runs</span>
           </div>
           
           <div className="flex flex-col gap-2">
-            {runs.map(run => {
+            {isLoadingRuns ? (
+              <SkeletonTable rows={5} cols={1} />
+            ) : runs.length === 0 ? (
+              <div className="empty-state">
+                <p>No payroll runs yet.</p>
+              </div>
+            ) : runs.map(run => {
               const isSelected = run.id === selectedRunId;
               let statusBadge = 'badge-muted';
               if (run.status === 'paid') statusBadge = 'badge-success';
@@ -529,12 +552,12 @@ export default function PayrollDashboard() {
         </div>
 
         {/* Right Side: Run Detail & Cost Allocations */}
-        <div className="card flex flex-col gap-4" style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', minHeight: 0, overflow: 'hidden' }}>
           {selectedRun ? (
-            <div className="flex flex-col h-full overflow-hidden">
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
               
               {/* Detail Header */}
-              <div className="flex justify-between items-center border-b pb-4 flex-wrap gap-4 flex-shrink-0">
+              <div className="border-b" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', flexWrap: 'wrap', gap: '1rem', flexShrink: 0 }}>
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-lg font-bold">{selectedRun.run_number}</h2>
@@ -562,16 +585,56 @@ export default function PayrollDashboard() {
                     {selectedRun.status === 'draft' ? 'Approve Run' : 'Mark as Paid / Disbburse'}
                   </button>
                 )}
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await payrollApi.exportRun(selectedRun.id, 'csv');
+                      const url = window.URL.createObjectURL(new Blob([res.data as any]));
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.setAttribute('download', `payroll-run-${selectedRun.id}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      link.remove();
+                    } catch (e) {
+                      showToast('Failed to export CSV', 'info');
+                    }
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                >
+                  <Download size={14} /> Export (CSV)
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await payrollApi.exportRun(selectedRun.id, 'pdf');
+                      const url = window.URL.createObjectURL(new Blob([res.data as any]));
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.setAttribute('download', `payroll-run-${selectedRun.id}.pdf`);
+                      document.body.appendChild(link);
+                      link.click();
+                      link.remove();
+                    } catch (e) {
+                      showToast('Failed to export PDF', 'info');
+                    }
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                >
+                  <FileText size={14} /> Export (PDF)
+                </button>
               </div>
 
               {/* Tab Selector */}
-              <div className="flex border-b mb-4 flex-shrink-0" style={{ gap: '1rem' }}>
+              <div className="border-b" style={{ display: 'flex', marginBottom: '1rem', flexShrink: 0, gap: '1rem' }}>
                 <button
                   onClick={() => setActiveTab('details')}
                   style={{
                     padding: '0.5rem 0',
                     borderBottom: activeTab === 'details' ? '2px solid var(--accent)' : '2px solid transparent',
-                    color: activeTab === 'details' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    color: activeTab === 'details' ? 'var(--accent)' : 'var(--text-secondary)',
                     fontWeight: activeTab === 'details' ? 600 : 500,
                     fontSize: '0.875rem'
                   }}
@@ -583,7 +646,7 @@ export default function PayrollDashboard() {
                   style={{
                     padding: '0.5rem 0',
                     borderBottom: activeTab === 'cost_allocation' ? '2px solid var(--accent)' : '2px solid transparent',
-                    color: activeTab === 'cost_allocation' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    color: activeTab === 'cost_allocation' ? 'var(--accent)' : 'var(--text-secondary)',
                     fontWeight: activeTab === 'cost_allocation' ? 600 : 500,
                     fontSize: '0.875rem'
                   }}
@@ -638,6 +701,13 @@ export default function PayrollDashboard() {
                             </td>
                             <td style={{ textAlign: 'right' }} className="text-danger text-xs font-semibold">
                               {item.deductions > 0 ? `-${formatCurrency(item.deductions)}` : '—'}
+                              {item.deductions > 0 && item.breakdown?.deductions && (
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '2px', fontWeight: 'normal' }}>
+                                  {item.breakdown.deductions.map((d: any, i: number) => (
+                                    <span key={i} style={{ display: 'block' }}>{d.description}: {formatCurrency(d.amount)}</span>
+                                  ))}
+                                </div>
+                              )}
                             </td>
                             <td style={{ textAlign: 'right' }} className="font-bold text-xs">{formatCurrency(item.net_salary)}</td>
                           </tr>
@@ -649,43 +719,43 @@ export default function PayrollDashboard() {
                   <div className="flex flex-col gap-4">
                     <p className="text-secondary text-xs">
                       Visualizing project cost capitalization for research tax credits and project gross profitability modeling based on timesheet hours.
-                    </p>
-
-                    <div className="data-table-wrap">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Project Scope</th>
-                            <th style={{ textAlign: 'center' }}>Logged Hours</th>
-                            <th style={{ textAlign: 'center' }}>Allocation %</th>
-                            <th style={{ textAlign: 'right' }}>Capitalized Direct Cost</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {costAllocations.map((alloc, idx) => (
-                            <tr key={idx}>
-                              <td className="font-semibold text-xs">{alloc.project_name}</td>
-                              <td style={{ textAlign: 'center' }} className="text-xs font-bold">{alloc.logged_hours}h</td>
-                              <td style={{ textAlign: 'center' }}>
-                                <div className="flex items-center justify-center gap-2">
-                                  <div style={{ width: '60px', background: 'var(--border)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${alloc.percentage}%`, background: 'var(--accent)', height: '100%' }} />
-                                  </div>
-                                  <span className="text-xs font-semibold">{alloc.percentage}%</span>
-                                </div>
-                              </td>
-                              <td style={{ textAlign: 'right' }} className="font-bold text-xs">{formatCurrency(alloc.allocated_cost)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Total Payout Summary bar */}
-              <div className="border-t pt-4 mt-4 flex justify-between items-center flex-shrink-0 flex-wrap gap-4">
+                     </p>
+ 
+                     <div className="data-table-wrap">
+                       <table className="data-table">
+                         <thead>
+                           <tr>
+                             <th>Project Scope</th>
+                             <th style={{ textAlign: 'center' }}>Logged Hours</th>
+                             <th style={{ textAlign: 'center' }}>Allocation %</th>
+                             <th style={{ textAlign: 'right' }}>Capitalized Direct Cost</th>
+                           </tr>
+                         </thead>
+                         <tbody>
+                           {costAllocations.map((alloc, idx) => (
+                             <tr key={idx}>
+                               <td className="font-semibold text-xs">{alloc.project_name}</td>
+                               <td style={{ textAlign: 'center' }} className="text-xs font-bold">{alloc.logged_hours}h</td>
+                               <td style={{ textAlign: 'center' }}>
+                                 <div className="flex items-center justify-center gap-2">
+                                   <div style={{ width: '60px', background: 'var(--border)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                                     <div style={{ width: `${alloc.percentage}%`, background: 'var(--accent)', height: '100%' }} />
+                                   </div>
+                                   <span className="text-xs font-semibold">{alloc.percentage}%</span>
+                                 </div>
+                               </td>
+                               <td style={{ textAlign: 'right' }} className="font-bold text-xs">{formatCurrency(alloc.allocated_cost)}</td>
+                             </tr>
+                           ))}
+                         </tbody>
+                       </table>
+                     </div>
+                   </div>
+                 )}
+               </div>
+ 
+               {/* Total Payout Summary bar */}
+               <div className="border-t" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', marginTop: '1rem', flexShrink: 0, flexWrap: 'wrap', gap: '1rem' }}>
                 <div className="flex gap-4">
                   <div>
                     <span className="text-secondary text-xs">Gross Salaries</span>

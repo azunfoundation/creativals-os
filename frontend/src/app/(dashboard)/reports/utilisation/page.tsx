@@ -47,7 +47,7 @@ export default function TeamUtilisationReport() {
       key: 'department',
       label: 'Department',
       render: (val: any) => (
-        <span className="bg-slate-950/50 border border-slate-800/80 px-2 py-0.5 rounded text-[10px] text-slate-400">
+        <span className="badge badge-muted">
           {val || 'General'}
         </span>
       ),
@@ -74,7 +74,7 @@ export default function TeamUtilisationReport() {
       label: 'Billable Rate',
       align: 'right' as const,
       sortable: true,
-      render: (val: any) => <span className="font-mono font-medium text-emerald-450">{val}%</span>,
+      render: (val: any) => <span className="font-mono font-medium text-emerald-455">{val}%</span>,
     },
   ];
 
@@ -108,9 +108,9 @@ export default function TeamUtilisationReport() {
       error={error ? (error as any).message : null}
     >
       {data && (
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
             <KpiCard
               title="Team Size"
               value={data.summary.team_size}
@@ -143,16 +143,16 @@ export default function TeamUtilisationReport() {
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.5rem' }}>
             {/* Left Column: Team breakdown */}
-            <div className="lg:col-span-2 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Resource Allocation Breakdown</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Resource Allocation Breakdown</h3>
               <ReportTable columns={memberColumns} data={data.breakdown} />
             </div>
 
             {/* Right Column: Top Projects by Logged Hours */}
-            <div className="lg:col-span-1 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Top Projects by Hours Logged</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Top Projects by Hours Logged</h3>
               <ReportTable columns={projectColumns} data={data.top_projects_by_hours} />
             </div>
           </div>

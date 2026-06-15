@@ -23,8 +23,8 @@ export default function BarChart({
 
   if (!data || data.length === 0) {
     return (
-      <div className="w-full flex items-center justify-center bg-slate-900 border border-slate-800 rounded-xl" style={{ height }}>
-        <p className="text-slate-500 text-xs">No trend data available</p>
+      <div className="card" style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p className="text-secondary text-xs">No trend data available</p>
       </div>
     );
   }
@@ -65,23 +65,27 @@ export default function BarChart({
   });
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm relative group w-full">
+    <div className="card" style={{ padding: '1.25rem', position: 'relative', width: '100%', minHeight: 0 }}>
       <svg viewBox={`0 0 ${svgWidth} ${height}`} className="w-full h-auto select-none">
         {/* Y Grid lines */}
         {gridYCoords.map((grid, idx) => (
-          <g key={idx} className="opacity-40">
+          <g key={idx} style={{ opacity: 0.4 }}>
             <line
               x1={padding.left}
               y1={grid.y}
               x2={svgWidth - padding.right}
               y2={grid.y}
-              className="stroke-slate-850 stroke-1 stroke-dasharray-[3,3]"
+              stroke="var(--border)"
+              strokeWidth={1}
+              strokeDasharray="3,3"
             />
             <text
               x={padding.left - 8}
               y={grid.y + 4}
               textAnchor="end"
-              className="fill-slate-500 text-[10px] font-mono"
+              fill="var(--text-muted)"
+              fontSize="10"
+              fontFamily="monospace"
             >
               {valueFormatter(grid.val)}
             </text>
@@ -94,7 +98,8 @@ export default function BarChart({
           y1={height - padding.bottom}
           x2={svgWidth - padding.right}
           y2={height - padding.bottom}
-          className="stroke-slate-800 stroke-1"
+          stroke="var(--border)"
+          strokeWidth={1}
         />
 
         {/* Bars */}
@@ -117,7 +122,8 @@ export default function BarChart({
                   width={halfWidth}
                   height={Math.max(h, 2)}
                   rx="1.5"
-                  className="fill-emerald-500 hover:fill-emerald-400 transition-colors duration-200 cursor-pointer"
+                  fill="var(--success)"
+                  style={{ cursor: 'pointer', transition: 'fill 0.2s' }}
                   onMouseEnter={() => setHoveredIdx(idx)}
                   onMouseLeave={() => setHoveredIdx(null)}
                 />
@@ -128,7 +134,8 @@ export default function BarChart({
                   width={halfWidth}
                   height={Math.max(coordSec.h, 2)}
                   rx="1.5"
-                  className="fill-sky-500 hover:fill-sky-400 transition-colors duration-200 cursor-pointer"
+                  fill="var(--info)"
+                  style={{ cursor: 'pointer', transition: 'fill 0.2s' }}
                   onMouseEnter={() => setHoveredIdx(idx)}
                   onMouseLeave={() => setHoveredIdx(null)}
                 />
@@ -137,7 +144,9 @@ export default function BarChart({
                   x={x + halfWidth}
                   y={height - padding.bottom + 16}
                   textAnchor="middle"
-                  className="fill-slate-500 text-[9px] font-medium"
+                  fill="var(--text-muted)"
+                  fontSize="9"
+                  fontWeight="500"
                 >
                   {d[xKey]}
                 </text>
@@ -154,7 +163,8 @@ export default function BarChart({
                 width={barWidth}
                 height={Math.max(h, 2)}
                 rx="3"
-                className="fill-emerald-500 hover:fill-emerald-400 transition-colors duration-200 cursor-pointer"
+                fill="var(--success)"
+                style={{ cursor: 'pointer', transition: 'fill 0.2s' }}
                 onMouseEnter={() => setHoveredIdx(idx)}
                 onMouseLeave={() => setHoveredIdx(null)}
               />
@@ -162,7 +172,9 @@ export default function BarChart({
                 x={x + barWidth / 2}
                 y={height - padding.bottom + 16}
                 textAnchor="middle"
-                className="fill-slate-500 text-[9px] font-medium"
+                fill="var(--text-muted)"
+                fontSize="9"
+                fontWeight="500"
               >
                 {d[xKey]}
               </text>
@@ -178,7 +190,8 @@ export default function BarChart({
               y={padding.top}
               width={rawBarWidth}
               height={chartHeight}
-              className="fill-slate-800/10 stroke-slate-800/50 stroke-1"
+              fill="var(--border)"
+              style={{ opacity: 0.1 }}
               pointerEvents="none"
             />
           </g>
@@ -188,23 +201,33 @@ export default function BarChart({
       {/* HTML absolute tooltip overlay */}
       {hoveredIdx !== null && (
         <div
-          className="absolute bg-slate-950/95 border border-slate-800 rounded-lg p-2.5 shadow-xl pointer-events-none text-xs text-slate-300 font-medium z-10"
           style={{
+            position: 'absolute',
+            background: 'var(--surface-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.625rem',
+            boxShadow: 'var(--shadow-lg)',
+            pointerEvents: 'none',
+            fontSize: '0.75rem',
+            color: 'var(--text-secondary)',
+            fontWeight: 500,
+            zIndex: 10,
             left: `${padding.left + hoveredIdx * rawBarWidth + rawBarWidth / 2}px`,
             top: '20px',
-            transform: 'translateX(-50%)',
+            transform: 'translateX(-50%)'
           }}
         >
-          <p className="text-slate-500 text-[10px] mb-1">{data[hoveredIdx][xKey]}</p>
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 justify-between">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500 inline-block" /> Primary:</span>
-              <span className="font-mono text-emerald-400">{valueFormatter(data[hoveredIdx][yKey])}</span>
+          <p style={{ color: 'var(--text-muted)', fontSize: '10px', marginBottom: '0.25rem' }}>{data[hoveredIdx][xKey]}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--success)', display: 'inline-block' }} /> Primary:</span>
+              <span style={{ fontFamily: 'monospace', color: 'var(--success)' }}>{valueFormatter(data[hoveredIdx][yKey])}</span>
             </div>
             {secondaryYKey && (
-              <div className="flex items-center gap-1.5 justify-between">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-sky-500 inline-block" /> Secondary:</span>
-                <span className="font-mono text-sky-400">{valueFormatter(data[hoveredIdx][secondaryYKey])}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--info)', display: 'inline-block' }} /> Secondary:</span>
+                <span style={{ fontFamily: 'monospace', color: 'var(--info)' }}>{valueFormatter(data[hoveredIdx][secondaryYKey])}</span>
               </div>
             )}
           </div>

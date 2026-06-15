@@ -1,21 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar, DollarSign, Clock, Users, CheckSquare, Plus,
   ChevronRight, ArrowLeft, MoreHorizontal, UserPlus, CheckCircle2,
-  AlertTriangle, Play, HelpCircle, Eye, LogIn, TrendingUp, Info, X
+  AlertTriangle, Play, HelpCircle, Eye, LogIn, TrendingUp, Info, X,
+  File, Download, Trash
 } from 'lucide-react';
 import Link from 'next/link';
 import {
   projects as projectsApi,
   users as usersApi,
-  Project, User, Task, Timesheet, Milestone, ProjectProfitability
+  Project, User, Task, Timesheet, Milestone, ProjectProfitability, ProjectDocument
 } from '@/lib/api';
 import { formatCurrency, formatDate, getInitials } from '@/lib/utils';
 import TaskDetailSlideOver from '@/components/TaskDetailSlideOver';
+import { FileUpload } from '@/components/ui/FileUpload';
 
 // ============================================================
 // Mock Data (Fallbacks for offline development)
@@ -205,13 +210,14 @@ const MOCK_PROFITABILITY: ProjectProfitability = {
 };
 
 export default function ProjectDetailPage() {
+  const { confirm, prompt } = useModal();
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
   const projectId = parseInt(params.id as string) || 1;
 
   // UI Tabs State
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'timesheets' | 'profitability'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'timesheets' | 'profitability' | 'documents'>('overview');
 
   // Slide-over task detail panel
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
@@ -239,7 +245,11 @@ export default function ProjectDetailPage() {
     queryKey: ['project', projectId],
     queryFn: async () => {
       const res = await projectsApi.get(projectId);
-      return res.data;
+      const data = res.data;
+      if (data) {
+        data.budget = data.budget_amount !== undefined ? parseFloat(data.budget_amount as any) : data.budget;
+      }
+      return data;
     }
   });
 
@@ -254,8 +264,17 @@ export default function ProjectDetailPage() {
   const { data: timesheets = MOCK_PROJECT_TIMESHEETS } = useQuery<Timesheet[]>({
     queryKey: ['projectTimesheets', projectId],
     queryFn: async () => {
-      const res = await projectsApi.timesheets(projectId);
-      return res.data;
+      try {
+        const res = await projectsApi.timesheets(projectId);
+        const list = Array.isArray(res.data) ? res.data : [];
+        return list.map((t: any) => ({
+          ...t,
+          hours: parseFloat(t.hours_logged) || parseFloat(t.hours) || 0,
+          billable: t.is_billable !== undefined ? !!t.is_billable : (t.billable !== undefined ? !!t.billable : true)
+        }));
+      } catch {
+        return MOCK_PROJECT_TIMESHEETS;
+      }
     }
   });
 
@@ -281,6 +300,19 @@ export default function ProjectDetailPage() {
       const res = await usersApi.list({ per_page: 100 });
       return res.data.data;
     }
+  });
+
+  const { data: documents = [] } = useQuery<ProjectDocument[]>({
+    queryKey: ['projectDocuments', projectId],
+    queryFn: async () => {
+      try {
+        const res = await projectsApi.listDocuments(projectId);
+        return res.data;
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!projectId,
   });
 
   // ============================================================
@@ -347,6 +379,22 @@ export default function ProjectDetailPage() {
         });
       }
     }
+  });
+
+  const addDocumentMutation = useMutation({
+    mutationFn: (data: { filename: string; file_path: string; file_size?: number; mime_type?: string }) =>
+      projectsApi.addDocument(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectDocuments', projectId] });
+    },
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: (documentId: number) =>
+      projectsApi.deleteDocument(projectId, documentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectDocuments', projectId] });
+    },
   });
 
   // ============================================================
@@ -482,8 +530,14 @@ export default function ProjectDetailPage() {
           {/* Quick Header */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-              <span className="badge badge-accent" style={{ fontSize: '0.7rem' }}>
-                {project?.status}
+              <span className={`badge ${
+                project?.status === 'completed' ? 'badge-success' :
+                (project?.status === 'active' || project?.status === 'in_progress') ? 'badge-accent' :
+                project?.status === 'planning' ? 'badge-info' :
+                project?.status === 'on_hold' ? 'badge-warning' :
+                'badge-danger'
+              }`} style={{ fontSize: '0.7rem', textTransform: 'capitalize' }}>
+                {project?.status === 'in_progress' ? 'In Progress' : (project?.status || 'Planning')}
               </span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                 {project?.project_number}
@@ -655,7 +709,7 @@ export default function ProjectDetailPage() {
                       </span>
                       {!isManager && (
                         <button
-                          onClick={() => { if (confirm(`Remove ${member.name} from project?`)) removeMemberMutation.mutate(member.id); }}
+                          onClick={async () => { if (await confirm({ message: `Remove ${member.name} from project?`, variant: 'danger' })) removeMemberMutation.mutate(member.id); }}
                           style={{ color: 'var(--text-muted)', background: 'none' }}
                           className="hover:text-danger"
                         >
@@ -694,7 +748,7 @@ export default function ProjectDetailPage() {
             height: '48px'
           }}>
             <div style={{ display: 'flex', gap: '1.5rem', height: '100%' }}>
-              {(['overview', 'tasks', 'timesheets', 'profitability'] as const).map((tab) => (
+              {(['overview', 'tasks', 'timesheets', 'profitability', 'documents'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -992,6 +1046,124 @@ export default function ProjectDetailPage() {
                     </div>
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Margin of {profitability.margin_percentage}%</span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── DOCUMENTS TAB (Sprint 10) ── */}
+            {activeTab === 'documents' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <h4 style={{ fontSize: '0.875rem', fontWeight: 600 }}>Project Documents</h4>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Upload and manage project assets, templates, briefs, and client deliverables.
+                  </p>
+                </div>
+
+                <FileUpload
+                  type="attachment"
+                  onUploadComplete={(res) => {
+                    addDocumentMutation.mutate({
+                      filename: res.filename,
+                      file_path: res.file_path,
+                      file_size: res.file_size,
+                      mime_type: res.mime_type,
+                    });
+                  }}
+                />
+
+                {/* Documents list */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.75rem',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--surface-elevated)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 'var(--radius-sm)',
+                          background: 'var(--surface)', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center',
+                          color: 'var(--text-secondary)', flexShrink: 0
+                        }}>
+                          <File size={16} />
+                        </div>
+                        <div style={{ overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              fontSize: '0.8125rem',
+                              fontWeight: 600,
+                              color: 'var(--text-primary)',
+                              textOverflow: 'ellipsis',
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap'
+                            }}
+                            title={doc.filename}
+                          >
+                            {doc.filename}
+                          </div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', display: 'flex', gap: '0.5rem', marginTop: '2px' }}>
+                            <span>{(doc.file_size / 1024).toFixed(0)} KB</span>
+                            <span>•</span>
+                            <span>{doc.uploader?.name || 'Uploader'}</span>
+                            <span>•</span>
+                            <span>{formatDate(doc.created_at)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.375rem' }}>
+                        <a
+                          href={doc.file_path && doc.file_path.startsWith('http') ? doc.file_path : `${process.env.NEXT_PUBLIC_STORAGE_URL || 'http://localhost:8000/storage'}/${doc.file_path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            width: 28, height: 28, display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            color: 'var(--text-secondary)', borderRadius: 'var(--radius-sm)',
+                            background: 'var(--surface)', border: '1px solid var(--border)',
+                          }}
+                          className="hover:text-primary"
+                          title="Download File"
+                        >
+                          <Download size={14} />
+                        </a>
+                        <button
+                          onClick={async () => {
+                            if (await confirm({ message: 'Are you sure you want to delete this document?', variant: 'danger' })) {
+                              deleteDocumentMutation.mutate(doc.id);
+                            }
+                          }}
+                          disabled={deleteDocumentMutation.isPending}
+                          style={{
+                            width: 28, height: 28, display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)',
+                            background: 'var(--surface)', border: '1px solid var(--border)',
+                            cursor: 'pointer',
+                          }}
+                          className="hover:text-danger"
+                          title="Delete Document"
+                        >
+                          <Trash size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {documents.length === 0 && (
+                    <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
+                      No documents uploaded for this project yet.
+                    </div>
+                  )}
                 </div>
               </div>
             )}

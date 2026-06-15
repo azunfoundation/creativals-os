@@ -133,9 +133,9 @@ export default function Client360Report() {
       error={error ? (error as any).message : null}
     >
       {data && (
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
             <KpiCard
               title="Total Clients"
               value={data.summary.total_clients}
@@ -169,8 +169,8 @@ export default function Client360Report() {
           </div>
 
           {/* Client Table */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Client Accounts Performance Breakdown</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Client Accounts Performance Breakdown</h3>
             <ReportTable columns={columns} data={data.breakdown} />
           </div>
         </div>

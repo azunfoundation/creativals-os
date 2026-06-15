@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Database, RefreshCw, Trash2, ShieldCheck, ShieldAlert, 
@@ -15,6 +18,7 @@ const MOCK_BACKUPS: BackupFile[] = [
 ];
 
 export default function BackupsPage() {
+  const { confirm, prompt } = useModal();
   const queryClient = useQueryClient();
 
   const [confirmRestoreFile, setConfirmRestoreFile] = useState<string | null>(null);
@@ -93,8 +97,8 @@ export default function BackupsPage() {
     createBackupMutation.mutate();
   };
 
-  const handleDeleteBackup = (filename: string) => {
-    if (confirm(`Are you absolutely sure you want to permanently delete the backup file "${filename}"?`)) {
+  const handleDeleteBackup = async (filename: string) => {
+    if (await confirm({ message: `Are you absolutely sure you want to permanently delete the backup file "${filename}"?`, variant: 'danger' })) {
       deleteBackupMutation.mutate(filename);
     }
   };
@@ -154,12 +158,12 @@ export default function BackupsPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gap: '1.5rem' }} className="grid grid-cols-1 lg:grid-cols-3">
+      <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         
         {/* ============================================================
-            COLUMN 1-2: BACKUP HISTORY LIST
+            LEFT: BACKUP HISTORY LIST
             ============================================================ */}
-        <div className="card lg:col-span-2" style={{ height: 'fit-content' }}>
+        <div className="card" style={{ flex: '1 1 500px', height: 'fit-content' }}>
           
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -277,7 +281,7 @@ export default function BackupsPage() {
         {/* ============================================================
             COLUMN 3: ACTIONS & SAFEKEEPING INFO
             ============================================================ */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '0 1 300px', minWidth: '240px' }}>
           
           {/* TRIGGER MANUAL BACKUP */}
           <div className="card">
@@ -310,7 +314,7 @@ export default function BackupsPage() {
             </h3>
             <ul style={{ paddingLeft: '1.15rem', margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.5rem', lineHeight: 1.4 }}>
               <li>Every backup is validated using <code style={{ fontFamily: 'monospace', padding: '1px 4px', background: 'var(--surface-elevated)', borderRadius: '3px' }}>PRAGMA integrity_check</code> query to safeguard against file corruption.</li>
-              <li>Before any database restore is executed, a **fallback pre-restore snapshot** is automatically created by the server to ensure undoability in case of failure.</li>
+              <li>Before any database restore is executed, a <strong>fallback pre-restore snapshot</strong> is automatically created by the server to ensure undoability in case of failure.</li>
               <li>Restoring will disconnect active SQLite connections and restart active system sessions.</li>
             </ul>
           </div>
@@ -367,7 +371,7 @@ export default function BackupsPage() {
                 <code style={{ display: 'block', margin: '0.5rem 0', padding: '6px 10px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: '4px', fontFamily: 'monospace', fontSize: '0.8125rem', color: 'var(--danger)', fontWeight: 600 }}>
                   {confirmRestoreFile}
                 </code>
-                **Warning**: This action will overwrite all current system records. This cannot be undone unless you roll back using the fallback pre-restore snapshot.
+                <strong>Warning</strong>: This action will overwrite all current system records. This cannot be undone unless you roll back using the fallback pre-restore snapshot.
               </p>
 
               {/* Safeguard Checkbox */}

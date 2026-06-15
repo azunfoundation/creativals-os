@@ -14,6 +14,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\QuoteMail;
+use App\Services\PdfService;
+use App\Models\User;
 
 class QuoteController extends Controller
 {
@@ -644,5 +648,62 @@ HTML;
             'Content-Type' => 'text/html',
             'Content-Disposition' => 'inline; filename="quote_' . $quote->quote_number . '.html"',
         ]);
+    }
+
+    /**
+     * Send quote email to client.
+     */
+    public function sendMail(Request $request, int $id): JsonResponse
+    {
+        $quote = Quote::with(['lead.contacts', 'client'])->findOrFail($id);
+
+        Gate::authorize('view', $quote);
+
+        $recipientEmail = null;
+        if ($quote->client && $quote->client->email) {
+            $recipientEmail = $quote->client->email;
+        } elseif ($quote->lead && $quote->lead->contacts->isNotEmpty()) {
+            $contact = $quote->lead->contacts->where('is_primary', true)->first()
+                ?? $quote->lead->contacts->first();
+            if ($contact && $contact->email) {
+                $recipientEmail = $contact->email;
+            }
+        }
+
+        if (!$recipientEmail) {
+            return response()->json([
+                'message' => 'Could not find a valid email address for the client or lead contacts.',
+            ], 422);
+        }
+
+        try {
+            $pdfService = app(PdfService::class);
+            $pdf = $pdfService->generateQuotePdf($quote);
+
+            Mail::to($recipientEmail)->send(new QuoteMail($quote, $pdf->output()));
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Failed to send email. Please verify SMTP settings.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Quote email sent to client successfully.',
+        ]);
+    }
+
+    /**
+     * Download quote PDF.
+     */
+    public function downloadPdf(Request $request, int $id, PdfService $pdfService)
+    {
+        $quote = Quote::findOrFail($id);
+
+        Gate::authorize('view', $quote);
+
+        $pdf = $pdfService->generateQuotePdf($quote);
+
+        return $pdf->download("quote-{$quote->quote_number}.pdf");
     }
 }

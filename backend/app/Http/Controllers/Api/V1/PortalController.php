@@ -44,6 +44,10 @@ class PortalController extends Controller
             return response()->json(['message' => 'Access denied. This portal is for clients only.'], 403);
         }
 
+        if (!$user->is_client_portal_user) {
+            return response()->json(['message' => 'Access denied. Portal access has been disabled for your account.'], 403);
+        }
+
         // Revoke any pre-existing portal tokens to enforce single-session behaviour.
         $user->tokens()->where('name', 'client-portal')->delete();
 

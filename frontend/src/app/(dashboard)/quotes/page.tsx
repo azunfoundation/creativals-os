@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { quotes as quotesApi } from '@/lib/api';
 import type { Quote } from '@/lib/api';
-import { Plus, Search, FileText, ChevronLeft, ChevronRight, Eye, Calendar, DollarSign, Check, X, ShieldAlert } from 'lucide-react';
+import { Plus, Search, FileText, ChevronLeft, ChevronRight, Eye, Calendar, DollarSign, Check, X, ShieldAlert, Edit2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 // ── Fallback Mock Data ──────────────────────────────────────────
@@ -135,64 +137,66 @@ export default function QuotesPage() {
 
   // Helper: Status badge colors
   const getStatusBadge = (status: Quote['status']) => {
-    const badges: Record<Quote['status'], { label: string; classes: string }> = {
-      draft: { label: 'Draft', classes: 'bg-zinc-800 text-zinc-400 border-zinc-700/60' },
-      pending_approval: { label: 'Pending Approval', classes: 'bg-amber-950/40 text-amber-400 border-amber-900/40' },
-      approved: { label: 'Approved', classes: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/40' },
-      sent: { label: 'Sent', classes: 'bg-blue-950/40 text-blue-400 border-blue-900/40' },
-      accepted: { label: 'Accepted', classes: 'bg-violet-950/50 text-violet-400 border-violet-850' },
-      rejected: { label: 'Rejected', classes: 'bg-red-950/40 text-red-400 border-red-900/40' },
-      expired: { label: 'Expired', classes: 'bg-zinc-900/50 text-zinc-500 border-zinc-800/80' },
-      converted: { label: 'Converted', classes: 'bg-teal-950/40 text-teal-400 border-teal-900/40' },
+    const badges: Record<Quote['status'], { label: string; className: string }> = {
+      draft: { label: 'Draft', className: 'badge-muted' },
+      pending_approval: { label: 'Pending Approval', className: 'badge-warning' },
+      approved: { label: 'Approved', className: 'badge-success' },
+      sent: { label: 'Sent', className: 'badge-info' },
+      accepted: { label: 'Accepted', className: 'badge-accent' },
+      rejected: { label: 'Rejected', className: 'badge-danger' },
+      expired: { label: 'Expired', className: 'badge-muted' },
+      converted: { label: 'Converted', className: 'badge-success' },
     };
 
-    const config = badges[status] || { label: status, classes: 'bg-zinc-800 text-zinc-400 border-zinc-700' };
+    const config = badges[status] || { label: status, className: 'badge-muted' };
 
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${config.classes}`}>
+      <span className={`badge ${config.className}`}>
         {config.label}
       </span>
     );
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-6">
+    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '1.25rem' }}>
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
-            <FileText className="text-violet-500 w-6 h-6" />
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FileText className="text-accent" size={24} />
             Quotations
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
             Create, build, track approvals, and manage client-facing product and pricing estimates.
           </p>
         </div>
-        <Link href="/quotes/create" className="btn btn-primary flex items-center gap-1.5 self-start sm:self-auto">
+        <Link href="/quotes/create" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Plus size={16} /> Create Quote
         </Link>
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-2.5 text-zinc-500 w-4.5 h-4.5" />
+        <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+          <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
             placeholder="Search by quote #, client, or title..."
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-            className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="form-input"
+            style={{ paddingLeft: '2.25rem', width: '100%' }}
           />
         </div>
 
-        {/* Status selection mobile-friendly scroll */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        {/* Status Selection */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+            className="form-input"
+            style={{ width: '180px' }}
           >
             {STATUS_FILTERS.map((f) => (
               <option key={f.value} value={f.value}>{f.label}</option>
@@ -203,46 +207,50 @@ export default function QuotesPage() {
 
       {/* Data Table */}
       {isLoading ? (
-        <div className="flex items-center justify-center p-12 bg-zinc-900/20 border border-zinc-850 rounded-xl">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
+        <div style={{ padding: '3rem', textAlign: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 52, borderRadius: 8 }} />
+            ))}
+          </div>
         </div>
       ) : quotesList.length === 0 ? (
-        <div className="p-12 bg-zinc-900/30 border border-zinc-800 rounded-xl text-center flex flex-col items-center justify-center space-y-3">
-          <FileText size={44} className="text-zinc-600" />
-          <h3 className="text-zinc-350 font-medium">No quotes found</h3>
-          <p className="text-xs text-zinc-500 max-w-md leading-relaxed">
+        <div className="empty-state">
+          <FileText size={48} className="empty-state-icon" />
+          <p style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>No quotes found</p>
+          <p style={{ fontSize: '0.875rem' }}>
             {searchQuery || statusFilter !== 'all'
               ? 'Try adjusting your search criteria or filters to see results.'
               : 'Create your first proposal layout and draft it directly inside our quotation builder.'}
           </p>
           {!searchQuery && statusFilter === 'all' && (
-            <Link href="/quotes/create" className="btn btn-secondary text-xs">
-              Draft Quote Now
+            <Link href="/quotes/create" className="btn btn-secondary btn-sm" style={{ marginTop: '0.5rem' }}>
+               Draft Quote Now
             </Link>
           )}
         </div>
       ) : (
-        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
+        <div className="data-table-wrap">
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
               <thead>
-                <tr className="bg-zinc-950/80 border-b border-zinc-800 text-zinc-450 text-xs font-bold uppercase tracking-wider">
-                  <th className="p-4">Quote Number</th>
-                  <th className="p-4">Lead / Client Name</th>
-                  <th className="p-4">Quote Title</th>
-                  <th className="p-4">Total Amount (INR)</th>
-                  <th className="p-4">Valid Until</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 text-center">Actions</th>
+                <tr>
+                  <th>Quote Number</th>
+                  <th>Lead / Client Name</th>
+                  <th>Quote Title</th>
+                  <th>Total Amount (INR)</th>
+                  <th>Valid Until</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+              <tbody>
                 {quotesList.map((quote) => (
-                  <tr key={quote.id} className="hover:bg-zinc-900/40 transition">
-                    <td className="p-4 font-mono text-xs text-violet-400 font-semibold">
+                  <tr key={quote.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>
                       {quote.quote_number}
                     </td>
-                    <td className="p-4">
+                    <td>
                       {quote.lead ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{quote.lead.company_name}</span>
@@ -254,24 +262,24 @@ export default function QuotesPage() {
                         <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No Lead Assigned</span>
                       )}
                     </td>
-                    <td className="p-4 max-w-xs truncate font-medium text-zinc-200">
+                    <td style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500, color: 'var(--text-primary)' }}>
                       {quote.title}
                     </td>
-                    <td className="p-4 font-bold text-zinc-150">
+                    <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
                       {formatCurrency(quote.total_amount, quote.currency)}
                     </td>
-                    <td className="p-4 text-xs">
+                    <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                       {formatDate(quote.valid_until)}
                     </td>
-                    <td className="p-4">
+                    <td>
                       {getStatusBadge(quote.status)}
                     </td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                    <td>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '0.375rem' }}>
                         <Link
                           id={`view-quote-${quote.id}`}
                           href={`/quotes/${quote.id}`}
-                          className="p-1.5 rounded bg-zinc-800/80 text-zinc-300 hover:text-violet-400 hover:bg-zinc-750 transition"
+                          className="btn btn-ghost btn-sm btn-icon"
                           title="View Details"
                         >
                           <Eye size={14} />
@@ -280,10 +288,10 @@ export default function QuotesPage() {
                           <Link
                             id={`edit-quote-${quote.id}`}
                             href={`/quotes/create?id=${quote.id}`}
-                            className="p-1.5 rounded bg-zinc-800/80 text-zinc-300 hover:text-violet-400 hover:bg-zinc-750 transition"
+                            className="btn btn-ghost btn-sm btn-icon"
                             title="Edit Quote"
                           >
-                            <Plus size={14} className="rotate-45" /> {/* fallback edit layout symbol */}
+                            <Edit2 size={14} />
                           </Link>
                         )}
                       </div>
@@ -293,33 +301,54 @@ export default function QuotesPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
 
-          {/* Pagination */}
-          {meta.last_page > 1 && (
-            <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-3 bg-zinc-950/60">
-              <span className="text-xs text-zinc-500">
-                Showing page <strong className="text-zinc-400">{meta.current_page}</strong> of <strong className="text-zinc-400">{meta.last_page}</strong>
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="p-1.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-750 disabled:opacity-40 disabled:hover:bg-zinc-800 transition"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  onClick={() => setPage(p => Math.min(meta.last_page, p + 1))}
-                  disabled={page === meta.last_page}
-                  className="p-1.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-750 disabled:opacity-40 disabled:hover:bg-zinc-800 transition"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
+      {/* Pagination */}
+      {!isLoading && meta.last_page > 1 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginTop: '1rem',
+          padding: '0 0.25rem'
+        }}>
+          <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+            Showing page <strong style={{ color: 'var(--text-primary)' }}>{meta.current_page}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{meta.last_page}</strong>
+          </span>
+          <div style={{ display: 'flex', gap: '0.375rem' }}>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="btn btn-secondary btn-sm"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            {[...Array(meta.last_page)].map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setPage(i + 1)}
+                className="btn btn-sm"
+                style={{
+                  background: meta.current_page === i + 1 ? 'var(--accent)' : 'var(--surface-elevated)',
+                  color: meta.current_page === i + 1 ? '#fff' : 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
+              disabled={page === meta.last_page}
+              className="btn btn-secondary btn-sm"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 }
+

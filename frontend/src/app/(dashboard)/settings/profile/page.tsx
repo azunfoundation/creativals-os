@@ -1,20 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { User as UserIcon, Mail, Phone, Loader2, Save, AlertCircle, Building2, BadgeCheck } from 'lucide-react';
-import { users as usersApi } from '@/lib/api';
+import { useState, useEffect } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { User as UserIcon, Mail, Phone, Loader2, Save, AlertCircle, Building2, BadgeCheck, Clock, MapPin, Monitor } from 'lucide-react';
+import { users as usersApi, auth as authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { FileUpload } from '@/components/ui/FileUpload';
 
 export default function ProfilePage() {
   const { user, setUser } = useAuthStore();
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Fetch login activity log
+  const { data: activityData, isLoading: activityLoading } = useQuery<any>({
+    queryKey: ['loginActivity'],
+    queryFn: async () => {
+      const res = await authApi.loginActivity();
+      return res.data;
+    },
+    enabled: !!user,
+  });
+
   // Form states
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [imageError, setImageError] = useState(false);
 
   // Load state when user is loaded
   useEffect(() => {
@@ -24,6 +38,10 @@ export default function ProfilePage() {
       setAvatarUrl(user.avatar_url || '');
     }
   }, [user]);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [avatarUrl]);
 
   const updateProfileMutation = useMutation({
     mutationFn: (data: { name: string; phone: string; avatar_url: string }) => {
@@ -118,22 +136,33 @@ export default function ProfilePage() {
           
           {/* Avatar Preview */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '1rem', background: 'var(--surface-elevated)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-            <div className="avatar avatar-lg" style={{ width: 64, height: 64, fontSize: '1.5rem', fontWeight: 600 }}>
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            <div className="avatar avatar-lg" style={{ width: 64, height: 64, fontSize: '1.5rem', fontWeight: 600, flexShrink: 0 }}>
+              {avatarUrl && !imageError ? (
+                <img 
+                  src={avatarUrl} 
+                  alt={name} 
+                  onError={() => setImageError(true)} 
+                  style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
+                />
               ) : (
-                name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                name ? name.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'
               )}
             </div>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Profile Picture</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Preview of your avatar as displayed in tasks, project members, and navigation.
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', marginBottom: '0.75rem' }}>
+                Upload a JPEG, PNG, WEBP, or GIF image (max 2MB).
               </div>
+              <FileUpload
+                type="avatar"
+                onUploadComplete={(res) => {
+                  setAvatarUrl(res.url);
+                }}
+              />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr' }}>
+          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))' }}>
             <div className="form-group">
               <label className="form-label">Full Name *</label>
               <input
@@ -161,7 +190,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr' }}>
+          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))' }}>
             <div className="form-group">
               <label className="form-label">Phone Number</label>
               <div style={{ position: 'relative' }}>
@@ -201,7 +230,7 @@ export default function ProfilePage() {
           </div>
 
           {/* User Roles & Departments Info */}
-          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
             <div>
               <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                 <BadgeCheck size={14} style={{ color: 'var(--accent)' }} /> Assigned Roles
@@ -271,6 +300,74 @@ export default function ProfilePage() {
           </div>
 
         </form>
+      </div>
+
+      {/* Login Session History Card */}
+      <div className="card" style={{ marginTop: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+          <Clock size={18} style={{ color: 'var(--accent)' }} />
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Login Session History</h2>
+        </div>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+          Review your recently active sessions. If you see any suspicious activity, please change your password immediately.
+        </p>
+        {activityLoading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+            <Loader2 className="animate-spin" size={24} style={{ color: 'var(--accent)' }} />
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '0.75rem 0.5rem' }}>Logged At</th>
+                  <th style={{ padding: '0.75rem 0.5rem' }}>IP Address</th>
+                  <th style={{ padding: '0.75rem 0.5rem' }}>Location</th>
+                  <th style={{ padding: '0.75rem 0.5rem' }}>Device</th>
+                  <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activityData?.data && activityData.data.length > 0 ? (
+                  activityData.data.map((act: any) => (
+                    <tr key={act.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-primary)' }}>
+                        {act.logged_at ? new Date(act.logged_at).toLocaleString() : 'N/A'}
+                      </td>
+                      <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                        {act.ip_address}
+                      </td>
+                      <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-secondary)' }}>
+                        {act.location || 'Unknown'}
+                      </td>
+                      <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-muted)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={act.user_agent}>
+                        {act.device_type ? act.device_type.toUpperCase() : 'Unknown'}
+                      </td>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: act.status === 'success' ? 'var(--success-subtle)' : 'var(--danger-subtle)',
+                          color: act.status === 'success' ? 'var(--success)' : 'var(--danger)',
+                        }}>
+                          {act.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '2rem 0.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      No recent login activity records found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
     </div>

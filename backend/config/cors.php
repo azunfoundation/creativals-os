@@ -7,11 +7,11 @@ return [
     | Cross-Origin Resource Sharing (CORS) Configuration
     |--------------------------------------------------------------------------
     |
-    | Here you may configure your settings for cross-origin resource sharing
-    | or "CORS". This determines what cross-origin operations may execute
-    | in web browsers. You are free to adjust these settings as needed.
+    | Allowed origins MUST be explicit (not wildcard) when supports_credentials
+    | is true — the CORS spec forbids wildcard + credentials together.
     |
-    | To learn more: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
+    | Set ALLOWED_ORIGINS in .env (comma-separated list):
+    |   ALLOWED_ORIGINS=http://localhost:3000,https://app.creativals.com
     |
     */
 
@@ -19,16 +19,23 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => explode(',', env('ALLOWED_ORIGINS', '*')),
+    // Explicit origins only — no wildcard when credentials=true
+    'allowed_origins' => array_filter(
+        explode(',', env('ALLOWED_ORIGINS', 'http://localhost:3000'))
+    ),
 
-    'allowed_origins_patterns' => [],
+    // Pattern fallback for subdomains (e.g. staging envs)
+    'allowed_origins_patterns' => array_filter(
+        explode(',', env('ALLOWED_ORIGINS_PATTERNS', ''))
+    ),
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    'exposed_headers' => ['Content-Disposition'],
 
-    'max_age' => 0,
+    'max_age' => 3600,
 
     'supports_credentials' => true,
 
 ];
+

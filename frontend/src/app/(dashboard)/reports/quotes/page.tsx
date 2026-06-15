@@ -74,9 +74,9 @@ export default function QuoteConversionReport() {
       error={error ? (error as any).message : null}
     >
       {data && (
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
             <KpiCard
               title="Total Quotes"
               value={data.summary.total_quotes}
@@ -109,16 +109,16 @@ export default function QuoteConversionReport() {
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.5rem' }}>
             {/* Left Panel: Funnel Chart */}
-            <div className="lg:col-span-1 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Conversion Funnel</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Conversion Funnel</h3>
               <FunnelChart data={data.funnel} />
             </div>
 
             {/* Right Panel: Top Quoted Services */}
-            <div className="lg:col-span-2 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Top Quoted Services</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h3 className="kpi-label" style={{ fontSize: '0.8125rem' }}>Top Quoted Services</h3>
               <ReportTable columns={columns} data={data.top_services} />
             </div>
           </div>

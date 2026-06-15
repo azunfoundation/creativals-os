@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState'; 
+import { useModal } from '@/providers/ModalProvider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CreditCard, Plus, Building2, Search, Filter, X,
@@ -18,6 +21,7 @@ import {
   Project,
   User
 } from '@/lib/api';
+import { FileUpload } from '@/components/ui/FileUpload';
 import { formatCurrency, formatDate, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 
@@ -125,6 +129,7 @@ const MOCK_PROJECTS = [
 ];
 
 export default function ExpensesDashboard() {
+  const { confirm, prompt } = useModal();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
@@ -143,6 +148,17 @@ export default function ExpensesDashboard() {
 
   // Drawer / Modals controllers
   const [showDrawer, setShowDrawer] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') === 'true') {
+        setShowDrawer(true);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+    }
+  }, []);
   const [showVendorModal, setShowVendorModal] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
 
@@ -173,16 +189,21 @@ export default function ExpensesDashboard() {
   // React Query Calls
   // ============================================================
 
-  const { data: expenses = localExpenses } = useQuery<Expense[]>({
+  const { data: expenses = localExpenses, isLoading: isExpensesLoading } = useQuery<Expense[]>({
     queryKey: ['expenses'],
     queryFn: async () => {
       try {
         const res = await expensesApi.listExpenses();
         const payload = res.data as any;
-        if (payload && Array.isArray(payload.data)) {
-          return payload.data;
-        }
-        return Array.isArray(payload) ? payload : localExpenses;
+        const rawList = payload && Array.isArray(payload.data) 
+          ? payload.data 
+          : (Array.isArray(payload) ? payload : localExpenses);
+        
+        return rawList.map((e: any) => ({
+          ...e,
+          amount: parseFloat(e.amount) || 0,
+          is_billable: e.is_billable === true || e.is_billable === 1 || String(e.is_billable) === 'true'
+        }));
       } catch {
         return localExpenses;
       }
@@ -406,10 +427,12 @@ export default function ExpensesDashboard() {
     let pending = 0;
 
     expenses.forEach(e => {
-      total += e.amount;
-      if (e.is_billable) billable += e.amount;
-      if (e.status === 'reimbursed') reimbursed += e.amount;
-      if (e.status === 'submitted') pending += e.amount;
+      const amt = parseFloat(e.amount as any) || 0;
+      total += amt;
+      const isBill = !!e.is_billable;
+      if (isBill) billable += amt;
+      if (e.status === 'reimbursed') reimbursed += amt;
+      if (e.status === 'submitted') pending += amt;
     });
 
     return { total, billable, reimbursed, pending };
@@ -519,8 +542,8 @@ export default function ExpensesDashboard() {
     expensesApi.updateExpense(id, { status: 'submitted' }).catch(() => {});
   };
 
-  const handleApproveAction = (id: number, action: 'approve' | 'reject') => {
-    const note = prompt(`Enter comments for this ${action === 'approve' ? 'approval' : 'rejection'}:`);
+  const handleApproveAction = async (id: number, action: 'approve' | 'reject') => {
+    const note = await prompt({ message: `Enter comments for this ${action === 'approve' ? 'approval' : 'rejection'}:` });
     approveExpenseMutation.mutate({ id, action, notes: note || undefined });
   };
 
@@ -737,6 +760,13 @@ export default function ExpensesDashboard() {
             </div>
 
             {/* Expense Registry Table */}
+            {isExpensesLoading ? (
+              <div className="data-table-wrap">
+                <SkeletonTable rows={5} cols={8} />
+              </div>
+            ) : filteredExpenses.length === 0 ? (
+              <EmptyState title="No expenses found" description="No expenses found matching the selected filters." />
+            ) : (
             <div className="data-table-wrap">
               <table className="data-table">
                 <thead>
@@ -832,7 +862,7 @@ export default function ExpensesDashboard() {
                                   <Edit2 size={13} />
                                 </button>
                                 <button
-                                  onClick={() => { if (confirm('Delete expense?')) deleteExpenseMutation.mutate(e.id); }}
+                                  onClick={async () => { if (await confirm({ message: 'Delete expense?', variant: 'danger' })) deleteExpenseMutation.mutate(e.id); }}
                                   style={{ color: 'var(--text-muted)' }}
                                   className="hover:text-danger p-1"
                                 >
@@ -849,16 +879,10 @@ export default function ExpensesDashboard() {
                     );
                   })}
 
-                  {filteredExpenses.length === 0 && (
-                    <tr>
-                      <td colSpan={11} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                        No logged expenses found matching selection.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
+            )}
 
           </div>
         )}
@@ -1128,7 +1152,62 @@ export default function ExpensesDashboard() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Receipt URL (Google Drive)</label>
+                  <label className="form-label">Receipt File Upload</label>
+                  <FileUpload
+                    type="receipt"
+                    onUploadComplete={(res) => {
+                      setFormReceiptUrl(res.url);
+                    }}
+                  />
+                  {formReceiptUrl && (
+                    <div style={{
+                      marginTop: '0.5rem',
+                      padding: '0.5rem',
+                      background: 'var(--surface-elevated)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-md)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                    }}>
+                      {formReceiptUrl.match(/\.(jpeg|jpg|png|gif|webp)/i) || !formReceiptUrl.endsWith('.pdf') ? (
+                        <div style={{ width: 48, height: 48, borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <img src={formReceiptUrl} alt="Receipt Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const parent = e.currentTarget.parentElement;
+                            if (parent) {
+                              const icon = document.createElement('span');
+                              icon.innerText = '📄';
+                              parent.appendChild(icon);
+                            }
+                          }} />
+                        </div>
+                      ) : (
+                        <div style={{ width: 48, height: 48, borderRadius: 'var(--radius-sm)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', flexShrink: 0 }}>
+                          📄
+                        </div>
+                      )}
+                      <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {formReceiptUrl.split('/').pop()}
+                        </div>
+                        <a href={formReceiptUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.7rem', color: 'var(--accent)', textDecoration: 'underline' }}>
+                          View Document
+                        </a>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormReceiptUrl('')}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Receipt URL (Direct or Google Drive)</label>
                   <input
                     type="url"
                     placeholder="https://drive.google.com/..."
@@ -1348,7 +1427,7 @@ export default function ExpensesDashboard() {
                               <Edit2 size={12} />
                             </button>
                             <button
-                              onClick={() => { if (confirm('Delete this vendor?')) deleteVendorMutation.mutate(v.id); }}
+                              onClick={async () => { if (await confirm({ message: 'Delete this vendor?', variant: 'danger' })) deleteVendorMutation.mutate(v.id); }}
                               style={{ color: 'var(--text-muted)' }}
                               className="hover:text-danger p-1"
                               title="Delete Vendor"

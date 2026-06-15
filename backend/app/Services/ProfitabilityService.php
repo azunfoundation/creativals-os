@@ -20,7 +20,7 @@ class ProfitabilityService
      * @param Carbon|null $to
      * @return array
      */
-    public function calculate(Project $project, ?Carbon $from = null, ?Carbon $to = null): array
+    public function calculate(Project $project, ?Carbon $from = null, ?Carbon $to = null, $preFetchedTimesheets = null, $preFetchedExpensesSum = null, $userHourlyRates = null): array
     {
         // ── 1. Revenue ────────────────────────────────────────────────────────
         $revenueStatuses = ['approved', 'sent', 'paid', 'partially_paid', 'overdue'];
@@ -34,40 +34,53 @@ class ProfitabilityService
         }
 
         // ── 2. Labor Cost ─────────────────────────────────────────────────────
-        $timesheetQuery = $project->timesheets()
-            ->whereIn('status', ['submitted', 'approved'])
-            ->with(['user.compensation']);
+        if ($preFetchedTimesheets !== null) {
+            $timesheets = $preFetchedTimesheets;
+        } else {
+            $timesheetQuery = $project->timesheets()
+                ->whereIn('status', ['submitted', 'approved'])
+                ->with(['user.compensation']);
 
-        if ($from) {
-            $timesheetQuery->where('date', '>=', $from->toDateString());
-        }
-        if ($to) {
-            $timesheetQuery->where('date', '<=', $to->toDateString());
-        }
+            if ($from) {
+                $timesheetQuery->where('date', '>=', $from->toDateString());
+            }
+            if ($to) {
+                $timesheetQuery->where('date', '<=', $to->toDateString());
+            }
 
-        $timesheets = $timesheetQuery->get();
+            $timesheets = $timesheetQuery->get();
+        }
 
         $laborCost = 0.0;
         $hoursLogged = 0.0;
         foreach ($timesheets as $timesheet) {
             $hours = (float) $timesheet->hours_logged;
             $hoursLogged += $hours;
-            $hourlyRate = $timesheet->user ? (float) $timesheet->user->hourly_rate : 0.0;
+            
+            if ($userHourlyRates !== null) {
+                $hourlyRate = (float) ($userHourlyRates[$timesheet->user_id] ?? 0.0);
+            } else {
+                $hourlyRate = $timesheet->user ? (float) $timesheet->user->hourly_rate : 0.0;
+            }
             $laborCost += $hours * $hourlyRate;
         }
 
         // ── 3. Expense Cost ───────────────────────────────────────────────────
-        $expenseQuery = $project->expenses()
-            ->whereIn('status', ['approved', 'reimbursed']);
+        if ($preFetchedExpensesSum !== null) {
+            $expenseCost = (float) $preFetchedExpensesSum;
+        } else {
+            $expenseQuery = $project->expenses()
+                ->whereIn('status', ['approved', 'reimbursed']);
 
-        if ($from) {
-            $expenseQuery->where('expense_date', '>=', $from->toDateString());
-        }
-        if ($to) {
-            $expenseQuery->where('expense_date', '<=', $to->toDateString());
-        }
+            if ($from) {
+                $expenseQuery->where('expense_date', '>=', $from->toDateString());
+            }
+            if ($to) {
+                $expenseQuery->where('expense_date', '<=', $to->toDateString());
+            }
 
-        $expenseCost = (float) $expenseQuery->sum('amount');
+            $expenseCost = (float) $expenseQuery->sum('amount');
+        }
 
         // ── 4. Calculations ───────────────────────────────────────────────────
         $totalCost = $laborCost + $expenseCost;

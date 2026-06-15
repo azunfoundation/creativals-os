@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\PackageController;
 use App\Http\Controllers\Api\V1\DiscountCouponController;
 use App\Http\Controllers\Api\V1\QuoteController;
 use App\Http\Controllers\Api\V1\InvoiceController;
+use App\Http\Controllers\Api\V1\CreditNoteController;
 use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\RecurringBillingRuleController;
 use App\Http\Controllers\Api\V1\ProjectController;
@@ -31,6 +32,16 @@ use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SettingController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\BackupController;
+use App\Http\Controllers\Api\V1\AttendanceController;
+use App\Http\Controllers\Api\V1\LeaveController;
+use App\Http\Controllers\Api\V1\NotificationPreferenceController;
+use App\Http\Controllers\Api\V1\FileController;
+use App\Http\Controllers\Api\V1\TaskAttachmentController;
+use App\Http\Controllers\Api\V1\ProjectDocumentController;
+use App\Http\Controllers\Api\V1\ClientCommunicationController;
+use App\Http\Controllers\Api\V1\AiController;
+use App\Http\Controllers\Api\V1\AiAutomationController;
+use App\Http\Controllers\Api\V1\SystemResetController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -57,12 +68,22 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             ->name('login')
             ->middleware('throttle:login');
 
+        // Password reset — public, throttled
+        Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
+            ->name('forgot-password')
+            ->middleware('throttle:5,1');
+
+        Route::post('/reset-password', [AuthController::class, 'resetPassword'])
+            ->name('reset-password')
+            ->middleware('throttle:5,1');
+
         // Protected auth routes
         Route::middleware('auth:sanctum')->group(function () {
-            Route::post('/logout',      [AuthController::class, 'logout'])->name('logout');
-            Route::post('/logout-all',  [AuthController::class, 'logoutAll'])->name('logout-all');
-            Route::get('/me',           [AuthController::class, 'me'])->name('me');
-            Route::get('/login-activity', [AuthController::class, 'loginActivity'])->name('login-activity');
+            Route::post('/logout',           [AuthController::class, 'logout'])->name('logout');
+            Route::post('/logout-all',       [AuthController::class, 'logoutAll'])->name('logout-all');
+            Route::get('/me',                [AuthController::class, 'me'])->name('me');
+            Route::get('/login-activity',    [AuthController::class, 'loginActivity'])->name('login-activity');
+            Route::post('/change-password',  [AuthController::class, 'changePassword'])->name('change-password');
         });
     });
 
@@ -86,6 +107,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::get('/',    [UserController::class, 'show'])->name('show');
                 Route::put('/',    [UserController::class, 'update'])->name('update');
                 Route::delete('/', [UserController::class, 'destroy'])->name('destroy');
+
+                // Reset a user's password (admin action)
+                Route::post('/reset-password', [UserController::class, 'resetPassword'])->name('reset-password');
 
                 // Assign roles to user
                 Route::put('/roles',       [UserController::class, 'syncRoles'])->name('sync-roles');
@@ -175,9 +199,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::apiResource('discount-coupons', DiscountCouponController::class);
 
         Route::get('quotes/{id}/pdf', [QuoteController::class, 'generatePdf'])->name('quotes.pdf');
+        Route::get('quotes/{id}/download-pdf', [QuoteController::class, 'downloadPdf'])->name('quotes.download-pdf');
         Route::post('quotes/{id}/submit-approval', [QuoteController::class, 'submitApproval'])->name('quotes.submit-approval');
         Route::post('quotes/{id}/approve', [QuoteController::class, 'approve'])->name('quotes.approve');
         Route::post('quotes/{id}/reject', [QuoteController::class, 'reject'])->name('quotes.reject');
+        Route::post('quotes/{id}/send', [QuoteController::class, 'sendMail'])->name('quotes.send');
         Route::apiResource('quotes', QuoteController::class);
 
         /*
@@ -191,7 +217,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('invoices/{id}/review', [InvoiceController::class, 'review'])->name('invoices.review');
         Route::post('invoices/{id}/approve', [InvoiceController::class, 'approve'])->name('invoices.approve');
         Route::post('invoices/{id}/reject', [InvoiceController::class, 'reject'])->name('invoices.reject');
+        Route::post('invoices/{id}/send', [InvoiceController::class, 'sendMail'])->name('invoices.send');
+        Route::get('invoices/{id}/download-pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.download-pdf');
         Route::apiResource('invoices', InvoiceController::class);
+        Route::apiResource('credit-notes', CreditNoteController::class)->only(['index', 'store', 'show']);
         Route::apiResource('payments', PaymentController::class)->only(['index', 'show', 'destroy']);
 
         // ─── Project Management, Tasks, & Timesheets Sprint 5 ──────────────
@@ -222,11 +251,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::apiResource('timesheets', TimesheetController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
 
         // ─── Payroll & Expense Management Sprint 6 ──────────────
+        Route::get('payroll/my-history', [PayrollRunController::class, 'myHistory'])->name('payroll.my-history');
+        Route::get('payroll/items/{item}/download-payslip', [PayrollRunController::class, 'downloadPayslip'])->name('payroll.items.download-payslip');
+        Route::get('payroll/runs/{payroll_run}/export', [PayrollRunController::class, 'export'])->name('payroll.runs.export');
         Route::post('payroll/runs/{payroll_run}/approve', [PayrollRunController::class, 'approve'])->name('payroll.runs.approve');
         Route::get('payroll/cost-allocation', [PayrollRunController::class, 'costAllocation'])->name('payroll.cost-allocation');
         Route::apiResource('payroll/runs', PayrollRunController::class)->only(['index', 'store', 'show']);
 
         Route::post('expenses/{expense}/approve', [ExpenseController::class, 'approve'])->name('expenses.approve');
+        Route::post('expenses/{expense}/reject',  [ExpenseController::class, 'reject'])->name('expenses.reject');
         Route::apiResource('expenses', ExpenseController::class);
 
         Route::apiResource('vendors', VendorController::class);
@@ -235,6 +268,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::prefix('reports')
             ->name('reports.')
             ->group(function () {
+                Route::get('dashboard',      [ReportController::class, 'dashboardOverview'])->name('dashboard');
                 Route::get('revenue',        [ReportController::class, 'revenueSummary'])->name('revenue');
                 Route::get('pipeline',       [ReportController::class, 'salesPipeline'])->name('pipeline');
                 Route::get('quotes',         [ReportController::class, 'quoteConversion'])->name('quotes');
@@ -251,9 +285,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             ->group(function () {
                 Route::get('/',                    [SettingController::class, 'index'])->name('index');
                 Route::put('company',             [SettingController::class, 'updateCompany'])->name('company');
+                Route::put('smtp',                [SettingController::class, 'updateSmtp'])->name('smtp');
                 Route::put('tax',                 [SettingController::class, 'updateTax'])->name('tax');
                 Route::put('number-sequences',    [SettingController::class, 'updateNumberSequences'])->name('number-sequences');
                 Route::put('currencies',          [SettingController::class, 'updateCurrencies'])->name('currencies');
+                Route::get('notifications',       [NotificationPreferenceController::class, 'index'])->name('notifications.index');
+                Route::put('notifications',       [NotificationPreferenceController::class, 'update'])->name('notifications.update');
             });
 
         Route::get('audit-logs',                  [AuditLogController::class, 'index'])->name('audit-logs.index');
@@ -266,6 +303,64 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::delete('{filename}',       [BackupController::class, 'destroy'])->name('destroy');
                 Route::post('{filename}/restore', [BackupController::class, 'restore'])->name('restore');
             });
+
+        Route::prefix('system')
+            ->name('system.')
+            ->group(function () {
+                Route::post('reset', [SystemResetController::class, 'resetPlatform'])->name('reset');
+                Route::post('reset/module', [SystemResetController::class, 'resetModule'])->name('reset.module');
+                Route::post('factory-reset', [SystemResetController::class, 'factoryReset'])->name('factory-reset');
+            });
+
+        // ─── Attendance Module (Sprint 9) ──────────────────────────────────
+        Route::prefix('attendance')->name('attendance.')->group(function () {
+            Route::get('/', [AttendanceController::class, 'index'])->name('index');
+            Route::get('/today', [AttendanceController::class, 'today'])->name('today');
+            Route::get('/team', [AttendanceController::class, 'team'])->name('team');
+            Route::get('/summary', [AttendanceController::class, 'summary'])->name('summary');
+            Route::post('/clock-in', [AttendanceController::class, 'clockIn'])->name('clock-in');
+            Route::post('/clock-out', [AttendanceController::class, 'clockOut'])->name('clock-out');
+            Route::put('/{record}', [AttendanceController::class, 'update'])->name('update');
+            Route::delete('/{record}', [AttendanceController::class, 'destroy'])->name('destroy');
+        });
+
+        Route::prefix('leave')->name('leave.')->group(function () {
+            Route::get('/types', [LeaveController::class, 'listTypes'])->name('types');
+            Route::get('/requests', [LeaveController::class, 'index'])->name('index');
+            Route::post('/requests', [LeaveController::class, 'store'])->name('store');
+            Route::get('/requests/{leaveRequest}', [LeaveController::class, 'show'])->name('show');
+            Route::put('/requests/{leaveRequest}', [LeaveController::class, 'update'])->name('update');
+            Route::delete('/requests/{leaveRequest}', [LeaveController::class, 'destroy'])->name('destroy');
+            Route::post('/requests/{leaveRequest}/approve', [LeaveController::class, 'approve'])->name('approve');
+            Route::post('/requests/{leaveRequest}/reject', [LeaveController::class, 'reject'])->name('reject');
+        });
+
+        Route::get('/holidays', [LeaveController::class, 'listHolidays'])->name('holidays.index');
+        Route::post('/holidays', [LeaveController::class, 'storeHoliday'])->name('holidays.store');
+        Route::put('/holidays/{holiday}', [LeaveController::class, 'updateHoliday'])->name('holidays.update');
+        Route::delete('/holidays/{holiday}', [LeaveController::class, 'destroyHoliday'])->name('holidays.destroy');
+
+        // ─── File Upload & Attachments System (Sprint 10) ───────────────────
+        Route::post('files/upload', [FileController::class, 'upload'])->name('files.upload');
+        Route::apiResource('tasks/{task}/attachments', TaskAttachmentController::class)->only(['index', 'store', 'destroy']);
+        Route::apiResource('projects/{project}/documents', ProjectDocumentController::class)->only(['index', 'store', 'destroy']);
+
+        // ─── Client Module Extensions (Phase 8) ─────────────────────────────
+        Route::apiResource('clients/{client}/communications', ClientCommunicationController::class)->only(['index', 'store', 'destroy']);
+
+        // ─── AI Assistant Module ────────────────────────────────────────────
+        Route::prefix('ai')->name('ai.')->group(function () {
+            Route::get('conversations', [AiController::class, 'listConversations']);
+            Route::post('conversations', [AiController::class, 'createConversation']);
+            Route::get('conversations/{id}', [AiController::class, 'getConversation']);
+            Route::delete('conversations/{id}', [AiController::class, 'deleteConversation']);
+            Route::put('conversations/{id}/pin', [AiController::class, 'togglePin']);
+            Route::put('conversations/{id}/save', [AiController::class, 'toggleSave']);
+            Route::post('messages/{id}/react', [AiController::class, 'reactToMessage']);
+            Route::post('chat', [AiController::class, 'chat']);
+            Route::post('voice/talk', [AiController::class, 'voiceTalk']);
+            Route::apiResource('automations', AiAutomationController::class);
+        });
     });
 
     // ─── Client Portal Sprint 7 ───────────────────────────────────────────────

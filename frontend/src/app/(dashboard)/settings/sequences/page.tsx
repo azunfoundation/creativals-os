@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sliders, Save, Loader2, AlertCircle, HelpCircle, Eye } from 'lucide-react';
 import { platformSettings as settingsApi, SystemSettings, NumberSequence } from '@/lib/api';
@@ -142,7 +144,7 @@ export default function NumberSequencesPage() {
 
         <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
           Configure unique prefix tags, numbering pads, and formatting structures for system modules.
-          Use <code className="px-1 py-0.5 rounded bg-neutral-800 text-purple-400 font-mono text-xs">&#123;PREFIX&#125;</code>, <code className="px-1 py-0.5 rounded bg-neutral-800 text-purple-400 font-mono text-xs">&#123;YEAR&#125;</code>, and <code className="px-1 py-0.5 rounded bg-neutral-800 text-purple-400 font-mono text-xs">&#123;NUMBER&#125;</code> in format keys.
+          Use <code style={{ padding: '1px 6px', borderRadius: '4px', background: 'var(--surface-elevated)', color: 'var(--accent)', fontFamily: 'monospace', fontSize: '0.75rem', border: '1px solid var(--border)' }}>&#123;PREFIX&#125;</code>, <code style={{ padding: '1px 6px', borderRadius: '4px', background: 'var(--surface-elevated)', color: 'var(--accent)', fontFamily: 'monospace', fontSize: '0.75rem', border: '1px solid var(--border)' }}>&#123;YEAR&#125;</code>, and <code style={{ padding: '1px 6px', borderRadius: '4px', background: 'var(--surface-elevated)', color: 'var(--accent)', fontFamily: 'monospace', fontSize: '0.75rem', border: '1px solid var(--border)' }}>&#123;NUMBER&#125;</code> in format keys.
         </p>
 
         <div className="data-table-wrap">

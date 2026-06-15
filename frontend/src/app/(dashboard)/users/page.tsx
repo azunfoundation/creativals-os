@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react'; 
+import { SkeletonTable } from '@/components/ui/Skeleton'; 
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Edit2, Trash2, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { users as usersApi, roles as rolesApi, departments as deptApi } from '@/lib/api';
@@ -104,7 +106,9 @@ export default function UsersPage() {
     queryFn: async () => {
       try {
         const res = await rolesApi.list();
-        return res.data as Role[];
+        const payload = res.data as any;
+        // API may return paginated { data: Role[] } or a plain array
+        return (Array.isArray(payload) ? payload : (payload?.data ?? [])) as Role[];
       } catch { return MOCK_ROLES; }
     },
   });
@@ -114,7 +118,9 @@ export default function UsersPage() {
     queryFn: async () => {
       try {
         const res = await deptApi.list();
-        return res.data as Department[];
+        const payload = res.data as any;
+        // API may return paginated { data: Department[] } or a plain array
+        return (Array.isArray(payload) ? payload : (payload?.data ?? [])) as Department[];
       } catch { return MOCK_DEPTS; }
     },
   });
@@ -238,22 +244,12 @@ export default function UsersPage() {
       {/* Table */}
       <div className="data-table-wrap">
         {isLoading ? (
-          <div style={{ padding: '3rem', textAlign: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="skeleton" style={{ height: 52, borderRadius: 8 }} />
-              ))}
-            </div>
-          </div>
+          <SkeletonTable rows={5} cols={5} />
         ) : filteredUsers.length === 0 ? (
-          <div className="empty-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="empty-state-icon">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <p style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>No users found</p>
-            <p style={{ fontSize: '0.875rem' }}>Try adjusting your filters or invite a new user.</p>
-          </div>
+          <EmptyState
+            title="No users found"
+            description="Adjust your filters or invite a new user to get started."
+          />
         ) : (
           <table className="data-table">
             <thead>

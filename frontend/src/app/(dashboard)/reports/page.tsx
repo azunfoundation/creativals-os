@@ -21,7 +21,9 @@ interface ReportCard {
   description: string;
   href: string;
   icon: any;
-  color: string;
+  textColor: string;
+  bgColor: string;
+  borderColor: string;
   permissionCheck: (user: any) => boolean;
 }
 
@@ -54,7 +56,9 @@ export default function ReportsHub() {
       description: 'Monthly invoicing trend, collection rate, and outstanding client balance breakdowns.',
       href: '/reports/revenue',
       icon: TrendingUp,
-      color: 'text-emerald-500 bg-emerald-950/20 border-emerald-900/30',
+      textColor: 'var(--success)',
+      bgColor: 'var(--success-subtle)',
+      borderColor: 'rgba(16, 185, 129, 0.2)',
       permissionCheck: (u) => check(['reports.view_financial']),
     },
     {
@@ -62,7 +66,9 @@ export default function ReportsHub() {
       description: 'Conversion rates, average acquisition costs, budget estimations, and deal temperatures.',
       href: '/reports/pipeline',
       icon: GitMerge,
-      color: 'text-sky-500 bg-sky-950/20 border-sky-900/30',
+      textColor: 'var(--info)',
+      bgColor: 'var(--info-subtle)',
+      borderColor: 'rgba(59, 130, 246, 0.2)',
       permissionCheck: (u) => check(['reports.view_sales']),
     },
     {
@@ -70,7 +76,9 @@ export default function ReportsHub() {
       description: 'Quote funnel stats, win/loss conversion ratios, and top quoted services analysis.',
       href: '/reports/quotes',
       icon: FileSpreadsheet,
-      color: 'text-violet-500 bg-violet-950/20 border-violet-900/30',
+      textColor: 'var(--accent)',
+      bgColor: 'var(--accent-subtle)',
+      borderColor: 'rgba(124, 58, 237, 0.2)',
       permissionCheck: (u) => check(['reports.view_sales', 'reports.view_financial']),
     },
     {
@@ -78,7 +86,9 @@ export default function ReportsHub() {
       description: 'Per-project revenue vs actual labor cost (timesheet aggregate) vs direct project expenses.',
       href: '/reports/profitability',
       icon: DollarSign,
-      color: 'text-amber-500 bg-amber-950/20 border-amber-900/30',
+      textColor: 'var(--warning)',
+      bgColor: 'var(--warning-subtle)',
+      borderColor: 'rgba(245, 158, 11, 0.2)',
       permissionCheck: (u) => check(['reports.view_financial'], ['project_manager']),
     },
     {
@@ -86,7 +96,9 @@ export default function ReportsHub() {
       description: 'Timesheets analysis comparing actual logged hours against target/billable expected hours.',
       href: '/reports/utilisation',
       icon: Activity,
-      color: 'text-teal-500 bg-teal-950/20 border-teal-900/30',
+      textColor: 'var(--success)',
+      bgColor: 'var(--success-subtle)',
+      borderColor: 'rgba(16, 185, 129, 0.2)',
       permissionCheck: (u) => check(['reports.view_hr'], ['project_manager']),
     },
     {
@@ -94,7 +106,9 @@ export default function ReportsHub() {
       description: 'Operational overhead categorized by billing type, category, vendor, and project allocations.',
       href: '/reports/expenses',
       icon: CreditCard,
-      color: 'text-rose-500 bg-rose-950/20 border-rose-900/30',
+      textColor: 'var(--danger)',
+      bgColor: 'var(--danger-subtle)',
+      borderColor: 'rgba(239, 68, 68, 0.2)',
       permissionCheck: (u) => check(['reports.view_financial']),
     },
     {
@@ -102,7 +116,9 @@ export default function ReportsHub() {
       description: 'Gross-to-net payouts, bonus aggregates, deductions, and monthly payroll history.',
       href: '/reports/payroll',
       icon: TrendingDown,
-      color: 'text-indigo-500 bg-indigo-950/20 border-indigo-900/30',
+      textColor: 'var(--accent)',
+      bgColor: 'var(--accent-subtle)',
+      borderColor: 'rgba(124, 58, 237, 0.2)',
       permissionCheck: (u) => check(['reports.view_hr', 'reports.view_financial']),
     },
     {
@@ -110,21 +126,23 @@ export default function ReportsHub() {
       description: 'Aggregate invoiced amounts, lifetime values, active projects count, and payment history per client.',
       href: '/reports/clients',
       icon: Building2,
-      color: 'text-purple-500 bg-purple-950/20 border-purple-900/30',
+      textColor: 'var(--accent)',
+      bgColor: 'var(--accent-subtle)',
+      borderColor: 'rgba(124, 58, 237, 0.2)',
       permissionCheck: (u) => check(['reports.view_sales', 'reports.view_financial']),
     },
   ];
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-slate-100">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-extrabold tracking-tight text-white">Reports & Analytics Hub</h1>
-        <p className="text-slate-400 text-sm">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%' }}>
+      <div>
+        <h1 className="text-2xl font-bold">Reports & Analytics Hub</h1>
+        <p className="text-secondary text-sm">
           Access role-restricted intelligence modules, trend metrics, and spreadsheet exports.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
+      <div className="kpi-grid kpi-grid-3" style={{ paddingTop: '1rem' }}>
         {REPORT_CARDS.map((card, idx) => {
           const isAllowed = card.permissionCheck(user);
 
@@ -132,16 +150,33 @@ export default function ReportsHub() {
             return (
               <div
                 key={idx}
-                className="bg-slate-900/40 border border-slate-900 rounded-xl p-5 shadow-sm relative overflow-hidden opacity-50 select-none cursor-not-allowed"
+                className="card"
+                style={{
+                  opacity: 0.5,
+                  cursor: 'not-allowed',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                  position: 'relative'
+                }}
               >
-                <div className="flex justify-between items-start">
-                  <div className={`p-2.5 rounded-lg bg-slate-950 text-slate-600 border border-slate-900`}>
-                    <card.icon className="w-5 h-5" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{
+                    padding: '0.625rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface-elevated)',
+                    color: 'var(--text-muted)',
+                    display: 'inline-flex'
+                  }}>
+                    <card.icon size={20} />
                   </div>
-                  <Lock className="w-4 h-4 text-slate-600" />
+                  <Lock size={16} className="text-muted" />
                 </div>
-                <h3 className="text-base font-bold text-slate-500 mt-4">{card.title}</h3>
-                <p className="text-slate-650 text-xs mt-1.5 leading-relaxed">{card.description}</p>
+                <div>
+                  <h3 className="text-sm font-bold text-muted" style={{ color: 'var(--text-muted)' }}>{card.title}</h3>
+                  <p className="text-muted text-xs mt-1">{card.description}</p>
+                </div>
               </div>
             );
           }
@@ -150,22 +185,41 @@ export default function ReportsHub() {
             <Link
               key={idx}
               href={card.href}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:border-slate-700 transition duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between"
+              className="card"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                textDecoration: 'none',
+                transition: 'all var(--transition-base)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--accent)';
+                e.currentTarget.style.boxShadow = 'var(--shadow-glow)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
             >
-              {/* Glow highlight on hover */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-slate-850/10 to-emerald-500/5 opacity-0 group-hover:opacity-100 transition duration-500 pointer-events-none" />
-
               <div>
-                <div className="flex justify-between items-start">
-                  <div className={`p-2.5 rounded-lg border ${card.color}`}>
-                    <card.icon className="w-5 h-5" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                  <div style={{
+                    padding: '0.625rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: `1px solid ${card.borderColor}`,
+                    backgroundColor: card.bgColor,
+                    color: card.textColor,
+                    display: 'inline-flex'
+                  }}>
+                    <card.icon size={20} />
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-300 group-hover:translate-x-0.5 transition duration-300" />
+                  <ChevronRight size={16} className="text-secondary" />
                 </div>
-                <h3 className="text-base font-bold text-slate-100 mt-4 group-hover:text-white transition duration-200">
-                  {card.title}
-                </h3>
-                <p className="text-slate-400 text-xs mt-1.5 leading-relaxed">{card.description}</p>
+                <h3 className="text-sm font-bold text-primary">{card.title}</h3>
+                <p className="text-secondary text-xs mt-1">{card.description}</p>
               </div>
             </Link>
           );

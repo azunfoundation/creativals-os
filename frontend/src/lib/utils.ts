@@ -5,7 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(amount: number, currency: any = 'INR'): string {
+export function formatCurrency(amount: number | string | null | undefined, currency: any = 'INR'): string {
+  // Null-safe: convert to number and default to 0 if NaN/null/undefined
+  const safeAmount = amount === null || amount === undefined ? 0 : Number(amount);
+  const numericAmount = isNaN(safeAmount) ? 0 : safeAmount;
+
   let currencyCode = 'INR';
   if (typeof currency === 'string') {
     currencyCode = currency;
@@ -23,14 +27,14 @@ export function formatCurrency(amount: number, currency: any = 'INR'): string {
       currency: currencyCode.toUpperCase(),
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(amount);
+    }).format(numericAmount);
   } catch {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(amount);
+    }).format(numericAmount);
   }
 }
 

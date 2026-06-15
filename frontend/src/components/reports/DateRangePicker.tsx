@@ -75,33 +75,100 @@ export default function DateRangePicker({ from, to, onChange }: DateRangePickerP
   };
 
   return (
-    <div className="relative inline-flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 shadow-sm">
-      <Calendar className="w-4 h-4 text-emerald-500" />
+    <div
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-md)',
+        padding: '0.5rem 0.75rem',
+        fontSize: '0.875rem',
+        color: 'var(--text-primary)',
+        boxShadow: 'var(--shadow-sm)'
+      }}
+    >
+      <Calendar size={16} className="text-accent" />
       
       {/* Preset Selector */}
-      <div className="relative">
+      <div style={{ position: 'relative' }}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1 font-semibold text-slate-100 hover:text-white cursor-pointer"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            cursor: 'pointer'
+          }}
         >
           <span>{preset}</span>
-          <ChevronDown className="w-3.5 h-3.5" />
+          <ChevronDown size={14} />
         </button>
 
         {isOpen && (
-          <div className="absolute left-0 mt-2 w-40 bg-slate-950 border border-slate-850 rounded-lg shadow-xl z-50 py-1">
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              marginTop: '0.5rem',
+              width: '160px',
+              background: 'var(--surface-elevated)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-lg)',
+              zIndex: 50,
+              padding: '0.25rem 0'
+            }}
+          >
             {Object.keys(presets).map((name) => (
               <button
                 key={name}
                 onClick={() => handlePresetSelect(name)}
-                className="w-full text-left px-3 py-1.5 hover:bg-slate-900 text-slate-300 hover:text-white text-xs cursor-pointer"
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '0.375rem 0.75rem',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  background: 'none'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
               >
                 {name}
               </button>
             ))}
             <button
               onClick={() => handlePresetSelect('Custom')}
-              className="w-full text-left px-3 py-1.5 hover:bg-slate-900 text-slate-300 hover:text-white text-xs cursor-pointer border-t border-slate-900"
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '0.375rem 0.75rem',
+                color: 'var(--text-secondary)',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                background: 'none',
+                borderTop: '1px solid var(--border)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = 'var(--text-secondary)';
+              }}
             >
               Custom Range
             </button>
@@ -109,22 +176,42 @@ export default function DateRangePicker({ from, to, onChange }: DateRangePickerP
         )}
       </div>
 
-      <span className="text-slate-600">|</span>
+      <span style={{ color: 'var(--border)' }}>|</span>
 
       {/* Date Inputs */}
-      <div className="flex items-center gap-1.5">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
         <input
           type="date"
           value={from}
           onChange={(e) => handleCustomDateChange('from', e.target.value)}
-          className="bg-transparent border-0 text-slate-300 focus:ring-0 text-xs w-28 cursor-pointer p-0"
+          className="form-input"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-primary)',
+            fontSize: '0.75rem',
+            width: '115px',
+            cursor: 'pointer',
+            padding: 0,
+            boxShadow: 'none'
+          }}
         />
-        <span className="text-slate-500 text-xs">to</span>
+        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>to</span>
         <input
           type="date"
           value={to}
           onChange={(e) => handleCustomDateChange('to', e.target.value)}
-          className="bg-transparent border-0 text-slate-300 focus:ring-0 text-xs w-28 cursor-pointer p-0"
+          className="form-input"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-primary)',
+            fontSize: '0.75rem',
+            width: '115px',
+            cursor: 'pointer',
+            padding: 0,
+            boxShadow: 'none'
+          }}
         />
       </div>
     </div>

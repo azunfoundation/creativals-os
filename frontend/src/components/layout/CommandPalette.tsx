@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Building2, Package, FileText, Receipt,
   FolderKanban, CheckSquare, Clock, Calendar, CreditCard,
-  Banknote, BarChart3, Settings, Search,
+  Banknote, BarChart3, Settings, Search, UserCog, ShieldCheck,
 } from 'lucide-react';
 
 interface NavItem {
@@ -28,6 +28,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Expenses',    icon: CreditCard,       href: '/expenses' },
   { label: 'Payroll',     icon: Banknote,         href: '/payroll' },
   { label: 'Reports',     icon: BarChart3,        href: '/reports' },
+  { label: 'Users',       icon: UserCog,          href: '/users' },
+  { label: 'Roles',       icon: ShieldCheck,      href: '/roles' },
   { label: 'Settings',    icon: Settings,         href: '/settings' },
 ];
 

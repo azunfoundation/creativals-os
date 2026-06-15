@@ -714,6 +714,7 @@ class ProductionDemoSeeder extends Seeder
                     'quantity' => $qItem->quantity,
                     'unit' => $qItem->unit,
                     'unit_price' => $qItem->unit_price,
+                    'tax_type' => $qItem->tax_rate > 0 ? 'custom' : 'none',
                     'discount_percent' => $qItem->discount_percent,
                     'discount_amount' => $qItem->discount_amount,
                     'tax_rate' => $qItem->tax_rate,

@@ -8,9 +8,12 @@ use App\Models\Department;
 use App\Models\Lead;
 use App\Models\Quote;
 use App\Models\User;
+use App\Models\CompanySetting;
+use Illuminate\Support\Facades\Schema;
 use App\Observers\AuditObserver;
 use App\Observers\LeadObserver;
 use App\Observers\QuoteObserver;
+use App\Observers\AiAutomationObserver;
 use App\Policies\DepartmentPolicy;
 use App\Policies\LeadPolicy;
 use App\Policies\QuotePolicy;
@@ -59,6 +62,26 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ─── Dynamic Mail Configuration ──────────────────────────────────────
+        try {
+            if (Schema::hasTable('company_settings')) {
+                $settings = CompanySetting::where('group', 'smtp')->pluck('value', 'key');
+                if ($settings->has('smtp_host')) {
+                    config([
+                        'mail.mailers.smtp.host'       => $settings->get('smtp_host'),
+                        'mail.mailers.smtp.port'       => (int)$settings->get('smtp_port', 587),
+                        'mail.mailers.smtp.username'   => $settings->get('smtp_username'),
+                        'mail.mailers.smtp.password'   => $settings->get('smtp_password'),
+                        'mail.mailers.smtp.encryption' => $settings->get('smtp_encryption', 'tls'),
+                        'mail.from.address'            => $settings->get('smtp_from_email'),
+                        'mail.from.name'               => $settings->get('smtp_from_name'),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore database connection issues during migrations/seeds
+        }
+
         // ─── Observers ───────────────────────────────────────────────────────
         User::observe(AuditObserver::class);
         Department::observe(AuditObserver::class);
@@ -77,6 +100,12 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Timesheet::observe(AuditObserver::class);
         \App\Models\PayrollRun::observe(AuditObserver::class);
         \App\Models\Expense::observe(AuditObserver::class);
+
+        // AI Automations Reactive Observers
+        Lead::observe(AiAutomationObserver::class);
+        \App\Models\Invoice::observe(AiAutomationObserver::class);
+        \App\Models\Project::observe(AiAutomationObserver::class);
+        \App\Models\Task::observe(AiAutomationObserver::class);
 
         // ─── Gates ───────────────────────────────────────────────────────────
 

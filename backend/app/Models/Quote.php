@@ -90,6 +90,16 @@ class Quote extends Model
     }
 
     /**
+     * Get the client that this quote belongs to.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'client_id');
+    }
+
+    /**
      * Get the user who created this quote.
      *
      * @return BelongsTo<User, $this>

@@ -89,7 +89,11 @@ export default function ServicesPage() {
     queryFn: async () => {
       try {
         const res = await servicesApi.list();
-        return res.data || MOCK_SERVICES;
+        const data = res.data || [];
+        return data.map((s: any) => ({
+          ...s,
+          base_price: s.base_price ?? (s.default_price !== undefined ? Number(s.default_price) : 0),
+        }));
       } catch {
         return MOCK_SERVICES;
       }
@@ -101,7 +105,21 @@ export default function ServicesPage() {
     queryFn: async () => {
       try {
         const res = await packagesApi.list();
-        return res.data || MOCK_PACKAGES;
+        const data = res.data || [];
+        return data.map((pkg: any) => {
+          const services = (pkg.services || []).map((s: any) => ({
+            ...s,
+            base_price: s.base_price ?? (s.default_price !== undefined ? Number(s.default_price) : 0),
+          }));
+          const totalBase = services.reduce((sum: number, s: any) => sum + s.base_price, 0);
+          const finalPrice = pkg.price !== undefined ? Number(pkg.price) : totalBase;
+          return {
+            ...pkg,
+            services,
+            discount_type: 'fixed',
+            discount_value: Math.max(0, totalBase - finalPrice),
+          };
+        });
       } catch {
         return MOCK_PACKAGES;
       }
@@ -178,24 +196,30 @@ export default function ServicesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-zinc-800">
+      <div className="flex border-b" style={{ gap: '1.5rem', marginBottom: '1.5rem' }}>
         <button
           onClick={() => setActiveTab('services')}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'services'
-              ? 'border-violet-500 text-violet-400'
-              : 'border-transparent text-zinc-400 hover:text-zinc-200'
-          }`}
+          style={{
+            padding: '0.75rem 0.5rem',
+            borderBottom: activeTab === 'services' ? '2px solid var(--accent)' : '2px solid transparent',
+            color: activeTab === 'services' ? 'var(--text-primary)' : 'var(--text-secondary)',
+            fontWeight: activeTab === 'services' ? 600 : 500,
+            fontSize: '0.875rem',
+            transition: 'all var(--transition-fast)'
+          }}
         >
           Services by Category
         </button>
         <button
           onClick={() => setActiveTab('packages')}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'packages'
-              ? 'border-violet-500 text-violet-400'
-              : 'border-transparent text-zinc-400 hover:text-zinc-200'
-          }`}
+          style={{
+            padding: '0.75rem 0.5rem',
+            borderBottom: activeTab === 'packages' ? '2px solid var(--accent)' : '2px solid transparent',
+            color: activeTab === 'packages' ? 'var(--text-primary)' : 'var(--text-secondary)',
+            fontWeight: activeTab === 'packages' ? 600 : 500,
+            fontSize: '0.875rem',
+            transition: 'all var(--transition-fast)'
+          }}
         >
           Bundled Packages
         </button>
@@ -203,17 +227,19 @@ export default function ServicesPage() {
 
       {/* Tab: Services */}
       {activeTab === 'services' && (
-        <div className="space-y-6">
+        <div className="space-y-6 flex flex-col gap-4">
           {/* Category Quick Filter */}
           <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mr-2">Filter Category:</span>
+            <span className="text-xs font-semibold text-muted uppercase tracking-wider mr-2">Filter Category:</span>
             <button
               onClick={() => setSelectedCategoryFilter('all')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                selectedCategoryFilter === 'all'
-                  ? 'bg-violet-600 text-white'
-                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-              }`}
+              className="px-3 py-1 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: selectedCategoryFilter === 'all' ? 'var(--accent)' : 'var(--surface-elevated)',
+                color: selectedCategoryFilter === 'all' ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+                transition: 'all var(--transition-fast)'
+              }}
             >
               All Categories
             </button>
@@ -221,11 +247,13 @@ export default function ServicesPage() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategoryFilter(cat.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                  selectedCategoryFilter === cat.id
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                }`}
+                className="px-3 py-1 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: selectedCategoryFilter === cat.id ? 'var(--accent)' : 'var(--surface-elevated)',
+                  color: selectedCategoryFilter === cat.id ? '#ffffff' : 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                  transition: 'all var(--transition-fast)'
+                }}
               >
                 {cat.name}
               </button>
@@ -233,60 +261,90 @@ export default function ServicesPage() {
           </div>
 
           {/* Grids per category */}
-          <div className="space-y-8">
+          <div className="space-y-8 flex flex-col gap-6">
             {servicesByCategory.map((cat) => (
-              <div key={cat.id} className="space-y-3">
-                <div className="border-b border-zinc-800 pb-2">
-                  <h2 className="text-lg font-bold text-zinc-200 tracking-tight">{cat.name}</h2>
-                  {cat.description && <p className="text-xs text-zinc-500">{cat.description}</p>}
+              <div key={cat.id} className="space-y-3 flex flex-col gap-2">
+                <div className="border-b pb-2">
+                  <h2 className="text-lg font-bold text-primary tracking-tight">{cat.name}</h2>
+                  {cat.description && <p className="text-xs text-muted">{cat.description}</p>}
                 </div>
 
                 {cat.services.length === 0 ? (
-                  <div className="p-6 bg-zinc-900/40 rounded-xl border border-dashed border-zinc-800 text-center text-zinc-500 text-sm">
+                  <div
+                    className="p-6 rounded-lg text-center text-muted text-sm"
+                    style={{
+                      background: 'var(--surface-elevated)',
+                      border: '1px dashed var(--border)'
+                    }}
+                  >
                     No services configured in this category.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                      gap: '1rem'
+                    }}
+                  >
                     {cat.services.map((service) => (
                       <div
                         key={service.id}
-                        className="group relative p-5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl shadow-md flex flex-col justify-between transition"
+                        className="group relative p-5 rounded-lg shadow flex flex-col justify-between"
+                        style={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          transition: 'all var(--transition-fast)',
+                          minHeight: '180px'
+                        }}
                       >
-                        <div className="space-y-2">
+                        <div className="space-y-2 flex flex-col gap-1.5">
                           <div className="flex justify-between items-start gap-2">
-                            <h3 className="font-semibold text-zinc-200 group-hover:text-violet-400 transition">
+                            <h3 className="font-semibold text-primary">
                               {service.name}
                             </h3>
-                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 whitespace-nowrap">
+                            <span
+                              className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded"
+                              style={{
+                                background: 'var(--surface-elevated)',
+                                color: 'var(--text-secondary)',
+                                border: '1px solid var(--border)'
+                              }}
+                            >
                               {service.unit}
                             </span>
                           </div>
                           {service.description && (
-                            <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">
+                            <p className="text-xs text-secondary leading-relaxed line-clamp-3">
                               {service.description}
                             </p>
                           )}
                         </div>
 
-                        <div className="mt-4 pt-4 border-t border-zinc-800/80 flex items-center justify-between">
+                        <div className="mt-4 pt-4 flex items-center justify-between" style={{ borderTop: '1px solid var(--border)' }}>
                           <div>
-                            <span className="text-xs text-zinc-500 block">Base Price</span>
-                            <span className="text-base font-bold text-zinc-100">
+                            <span className="text-[10px] text-muted block">Base Price</span>
+                            <span className="text-base font-bold text-primary">
                               {formatCurrency(service.base_price)}
                             </span>
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-zinc-500 block">Tax Rate</span>
-                            <span className="text-xs font-semibold text-zinc-400">{service.tax_rate}% GST</span>
+                            <span className="text-[10px] text-muted block">Tax Rate</span>
+                            <span className="text-xs font-semibold text-secondary">{service.tax_rate}% GST</span>
                           </div>
                         </div>
 
                         {/* Card Hover Actions */}
-                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <div className="card-actions">
                           <button
                             id={`edit-service-${service.id}`}
                             onClick={() => { setEditService(service); setServiceModalOpen(true); }}
-                            className="p-1.5 rounded bg-zinc-800/90 text-zinc-300 hover:text-violet-400 hover:bg-zinc-700 border border-zinc-700 transition"
+                            className="p-1 rounded text-secondary hover:text-accent"
+                            style={{
+                              background: 'var(--surface-elevated)',
+                              border: '1px solid var(--border)',
+                              padding: '6px'
+                            }}
                             title="Edit Service"
                           >
                             <Edit2 size={13} />
@@ -294,7 +352,12 @@ export default function ServicesPage() {
                           <button
                             id={`delete-service-${service.id}`}
                             onClick={() => setServiceDeleteConfirm(service.id)}
-                            className="p-1.5 rounded bg-zinc-800/90 text-zinc-400 hover:text-red-400 hover:bg-zinc-700 border border-zinc-700 transition"
+                            className="p-1 rounded text-secondary hover:text-danger"
+                            style={{
+                              background: 'var(--surface-elevated)',
+                              border: '1px solid var(--border)',
+                              padding: '6px'
+                            }}
                             title="Delete Service"
                           >
                             <Trash2 size={13} />
@@ -312,15 +375,27 @@ export default function ServicesPage() {
 
       {/* Tab: Bundled Packages */}
       {activeTab === 'packages' && (
-        <div className="space-y-6">
+        <div className="space-y-6 flex flex-col gap-4">
           {packagesList.length === 0 ? (
-            <div className="p-12 bg-zinc-900/30 border border-zinc-800 rounded-xl text-center flex flex-col items-center justify-center space-y-2">
-              <Layers size={40} className="text-zinc-600" />
-              <p className="text-zinc-400 font-medium">No bundled packages configured</p>
-              <p className="text-xs text-zinc-500">Create bundle offers by combining multiple service products with automated pricing discounts.</p>
+            <div
+              className="p-12 rounded-lg text-center flex flex-col items-center justify-center gap-2"
+              style={{
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--border)'
+              }}
+            >
+              <Layers size={40} className="text-muted" />
+              <p className="text-primary font-medium">No bundled packages configured</p>
+              <p className="text-xs text-muted">Create bundle offers by combining multiple service products with automated pricing discounts.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))',
+                gap: '1.5rem'
+              }}
+            >
               {packagesList.map((pkg) => {
                 const totalBase = (pkg.services || []).reduce((sum, s) => sum + s.base_price, 0);
                 let discountText = '';
@@ -336,23 +411,41 @@ export default function ServicesPage() {
                 return (
                   <div
                     key={pkg.id}
-                    className="group relative p-6 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl shadow-md flex flex-col justify-between transition space-y-5"
+                    className="group relative p-6 rounded-lg shadow flex flex-col justify-between"
+                    style={{
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      transition: 'all var(--transition-fast)',
+                      gap: '1.25rem'
+                    }}
                   >
-                    <div className="space-y-3">
+                    <div className="space-y-3 flex flex-col gap-2">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <h3 className="text-lg font-bold text-zinc-100 group-hover:text-violet-400 transition">
+                          <h3 className="text-lg font-bold text-primary">
                             {pkg.name}
                           </h3>
-                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 mt-1.5 rounded-full bg-violet-950/50 text-violet-400 border border-violet-850">
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 mt-1.5 rounded-full"
+                            style={{
+                              background: 'var(--accent-subtle)',
+                              color: 'var(--accent)',
+                              border: '1px solid var(--border)'
+                            }}
+                          >
                             <Tag size={10} /> {discountText}
                           </span>
                         </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="pkg-actions">
                           <button
                             id={`edit-pkg-${pkg.id}`}
                             onClick={() => { setEditPackage(pkg); setPackageModalOpen(true); }}
-                            className="p-1.5 rounded bg-zinc-800/90 text-zinc-300 hover:text-violet-400 hover:bg-zinc-700 border border-zinc-700 transition"
+                            className="p-1 rounded text-secondary hover:text-accent"
+                            style={{
+                              background: 'var(--surface-elevated)',
+                              border: '1px solid var(--border)',
+                              padding: '6px'
+                            }}
                             title="Edit Package"
                           >
                             <Edit2 size={13} />
@@ -360,7 +453,12 @@ export default function ServicesPage() {
                           <button
                             id={`delete-pkg-${pkg.id}`}
                             onClick={() => setPackageDeleteConfirm(pkg.id)}
-                            className="p-1.5 rounded bg-zinc-800/90 text-zinc-400 hover:text-red-400 hover:bg-zinc-700 border border-zinc-700 transition"
+                            className="p-1 rounded text-secondary hover:text-danger"
+                            style={{
+                              background: 'var(--surface-elevated)',
+                              border: '1px solid var(--border)',
+                              padding: '6px'
+                            }}
                             title="Delete Package"
                           >
                             <Trash2 size={13} />
@@ -369,19 +467,33 @@ export default function ServicesPage() {
                       </div>
 
                       {pkg.description && (
-                        <p className="text-sm text-zinc-400 leading-relaxed">
+                        <p className="text-sm text-secondary leading-relaxed">
                           {pkg.description}
                         </p>
                       )}
 
                       {/* Included Services list */}
-                      <div className="space-y-2 pt-2">
-                        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Included Services ({pkg.services?.length || 0}):</span>
-                        <div className="bg-zinc-950/60 rounded-lg border border-zinc-850 divide-y divide-zinc-900 overflow-hidden">
-                          {pkg.services?.map(s => (
-                            <div key={s.id} className="flex justify-between items-center p-2.5 text-xs">
-                              <span className="text-zinc-300 font-medium">{s.name}</span>
-                              <span className="text-zinc-500">{formatCurrency(s.base_price)} / {s.unit}</span>
+                      <div className="space-y-2 pt-2 flex flex-col gap-1.5">
+                        <span className="text-xs font-semibold text-muted uppercase tracking-wider block">
+                          Included Services ({pkg.services?.length || 0}):
+                        </span>
+                        <div
+                          className="rounded-lg overflow-hidden"
+                          style={{
+                            background: 'var(--background)',
+                            border: '1px solid var(--border)'
+                          }}
+                        >
+                          {pkg.services?.map((s, sIdx) => (
+                            <div
+                              key={s.id}
+                              className="flex justify-between items-center p-2.5 text-xs"
+                              style={{
+                                borderTop: sIdx > 0 ? '1px solid var(--border-subtle)' : 'none'
+                              }}
+                            >
+                              <span className="text-primary font-medium">{s.name}</span>
+                              <span className="text-secondary">{formatCurrency(s.base_price)} / {s.unit}</span>
                             </div>
                           ))}
                         </div>
@@ -389,16 +501,22 @@ export default function ServicesPage() {
                     </div>
 
                     {/* Cost Summary Box */}
-                    <div className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-850 flex items-center justify-between">
+                    <div
+                      className="p-4 rounded-lg flex items-center justify-between"
+                      style={{
+                        background: 'var(--surface-elevated)',
+                        border: '1px solid var(--border)'
+                      }}
+                    >
                       <div className="space-y-0.5">
-                        <span className="text-xs text-zinc-500 block">Total Base Price</span>
-                        <span className="text-sm text-zinc-400 line-through">
+                        <span className="text-[10px] text-muted block">Total Base Price</span>
+                        <span className="text-sm text-secondary line-through">
                           {formatCurrency(totalBase)}
                         </span>
                       </div>
                       <div className="text-right space-y-0.5">
-                        <span className="text-xs text-violet-400 font-medium block">Bundled Special</span>
-                        <span className="text-lg font-extrabold text-zinc-100">
+                        <span className="text-xs text-accent font-medium block">Bundled Special</span>
+                        <span className="text-lg font-extrabold text-primary">
                           {formatCurrency(finalVal)}
                         </span>
                       </div>
@@ -518,16 +636,23 @@ function ServiceFormModal({
   const [errors, setErrors] = useState<Partial<Record<keyof ServiceForm, string>>>({});
 
   const createMutation = useMutation({
-    mutationFn: (data: Partial<Service>) => servicesApi.create(data),
     onSuccess,
+    mutationFn: (data: any) => servicesApi.create(data),
     onError: () => onSuccess(), // Fallback simulation for offline mock usage
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Service> }) => servicesApi.update(id, data),
     onSuccess,
+    mutationFn: ({ id, data }: { id: number; data: any }) => servicesApi.update(id, data),
     onError: () => onSuccess(),
   });
+
+  const mapUnitToBillingType = (unit: string) => {
+    if (unit === 'hour') return 'hourly';
+    if (unit === 'month') return 'monthly';
+    if (unit === 'year') return 'yearly';
+    return 'fixed';
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -541,31 +666,51 @@ function ServiceFormModal({
       return;
     }
 
+    const payload = {
+      category_id: form.category_id,
+      name: form.name,
+      description: form.description,
+      default_price: form.base_price,
+      currency_id: 1, // Default to INR
+      billing_type: mapUnitToBillingType(form.unit),
+      unit: form.unit,
+      is_active: true,
+      is_taxable: true,
+      tax_rate: form.tax_rate,
+    };
+
     if (isEdit) {
-      updateMutation.mutate({ id: service.id, data: form });
+      updateMutation.mutate({ id: service.id, data: payload });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(payload);
     }
   };
 
   return (
     <div className="overlay z-50" onClick={onClose}>
-      <div className="modal max-w-lg bg-zinc-950 border border-zinc-800 text-zinc-100 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
+      <div
+        className="modal max-w-lg shadow-lg text-primary"
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header px-6 py-4 flex justify-between items-center" style={{ borderBottom: '1px solid var(--border)' }}>
           <h2 className="modal-title text-lg font-bold">{isEdit ? 'Edit Service Product' : 'Add Service Product'}</h2>
           <button onClick={onClose} className="btn btn-ghost btn-icon p-1 hover:bg-zinc-800 rounded">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
           {/* Category selection */}
           <div className="form-group">
-            <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Service Category *</label>
+            <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Service Category *</label>
             <select
               value={form.category_id}
               onChange={(e) => setForm(p => ({ ...p, category_id: Number(e.target.value) }))}
-              className="form-input w-full bg-zinc-900 border border-zinc-800 text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 outline-none"
+              className="form-input"
             >
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -575,49 +720,56 @@ function ServiceFormModal({
 
           {/* Service name */}
           <div className="form-group">
-            <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Service Name *</label>
+            <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Service Name *</label>
             <input
               type="text"
               placeholder="e.g. On-Page SEO Campaign"
               value={form.name}
               onChange={(e) => { setForm(p => ({ ...p, name: e.target.value })); setErrors(p => ({ ...p, name: undefined })); }}
-              className={`form-input w-full bg-zinc-900 border text-sm rounded-lg px-3 py-2 outline-none ${errors.name ? 'border-red-500 focus:ring-red-500' : 'border-zinc-800 focus:ring-violet-500'}`}
+              className={`form-input ${errors.name ? 'error' : ''}`}
             />
-            {errors.name && <span className="text-red-500 text-xs mt-1 block">{errors.name}</span>}
+            {errors.name && <span className="text-danger text-xs mt-1 block">{errors.name}</span>}
           </div>
 
           {/* Description */}
           <div className="form-group">
-            <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Description</label>
+            <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Description</label>
             <textarea
               placeholder="Detailed explanation of the deliverables, scope of work, etc."
               rows={3}
               value={form.description}
               onChange={(e) => setForm(p => ({ ...p, description: e.target.value }))}
-              className="form-input w-full bg-zinc-900 border border-zinc-800 text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 outline-none resize-none"
+              className="form-input"
+              style={{ resize: 'none' }}
             />
           </div>
 
           {/* Price, Unit, Tax grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+              gap: '1rem'
+            }}
+          >
             <div className="form-group">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Base Price (INR) *</label>
+              <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Base Price (INR) *</label>
               <input
                 type="number"
                 placeholder="25000"
                 value={form.base_price || ''}
                 onChange={(e) => { setForm(p => ({ ...p, base_price: Number(e.target.value) })); setErrors(p => ({ ...p, base_price: undefined })); }}
-                className={`form-input w-full bg-zinc-900 border text-sm rounded-lg px-3 py-2 outline-none ${errors.base_price ? 'border-red-500 focus:ring-red-500' : 'border-zinc-800 focus:ring-violet-500'}`}
+                className={`form-input ${errors.base_price ? 'error' : ''}`}
               />
-              {errors.base_price && <span className="text-red-500 text-xs mt-1 block">{errors.base_price}</span>}
+              {errors.base_price && <span className="text-danger text-xs mt-1 block">{errors.base_price}</span>}
             </div>
 
             <div className="form-group">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Unit *</label>
+              <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Unit *</label>
               <select
                 value={form.unit}
                 onChange={(e) => setForm(p => ({ ...p, unit: e.target.value }))}
-                className="form-input w-full bg-zinc-900 border border-zinc-800 text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 outline-none"
+                className="form-input"
               >
                 <option value="hour">Per Hour</option>
                 <option value="month">Per Month</option>
@@ -629,11 +781,11 @@ function ServiceFormModal({
             </div>
 
             <div className="form-group">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Tax Rate (GST %)</label>
+              <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Tax Rate (GST %)</label>
               <select
                 value={form.tax_rate}
                 onChange={(e) => setForm(p => ({ ...p, tax_rate: Number(e.target.value) }))}
-                className="form-input w-full bg-zinc-900 border border-zinc-800 text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 outline-none"
+                className="form-input"
               >
                 <option value={0}>0% (Exempt)</option>
                 <option value={5}>5%</option>
@@ -644,7 +796,7 @@ function ServiceFormModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+          <div className="flex justify-end gap-3 pt-4" style={{ borderTop: '1px solid var(--border)', marginTop: '0.5rem' }}>
             <button type="button" className="btn btn-secondary text-xs" onClick={onClose}>Cancel</button>
             <button
               id="service-form-submit"
@@ -693,14 +845,14 @@ function PackageFormModal({
   const [errors, setErrors] = useState<Partial<Record<keyof PackageForm, string>>>({});
 
   const createMutation = useMutation({
-    mutationFn: (data: Partial<Package> & { service_ids?: number[] }) => packagesApi.create(data),
     onSuccess,
+    mutationFn: (data: any) => packagesApi.create(data),
     onError: () => onSuccess(),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Package> & { service_ids?: number[] } }) => packagesApi.update(id, data),
     onSuccess,
+    mutationFn: ({ id, data }: { id: number; data: any }) => packagesApi.update(id, data),
     onError: () => onSuccess(),
   });
 
@@ -728,57 +880,100 @@ function PackageFormModal({
       return;
     }
 
-    if (isEdit) {
-      updateMutation.mutate({ id: pkg.id, data: form });
+    const selectedServices = servicesList.filter(s => form.service_ids.includes(s.id));
+    const totalBase = selectedServices.reduce((sum, s) => {
+      const price = s.base_price || 0;
+      return sum + price;
+    }, 0);
+
+    let price = totalBase;
+    if (form.discount_type === 'percentage') {
+      price = totalBase * (1 - form.discount_value / 100);
     } else {
-      createMutation.mutate(form);
+      price = Math.max(0, totalBase - form.discount_value);
+    }
+
+    const payload = {
+      name: form.name,
+      description: form.description,
+      price,
+      currency_id: 1, // Default to INR
+      billing_cycle: 'one_time',
+      is_active: true,
+      is_featured: false,
+      services: form.service_ids.map(id => ({
+        service_id: id,
+        custom_price: null,
+        quantity: 1,
+        description: null,
+      })),
+    };
+
+    if (isEdit) {
+      updateMutation.mutate({ id: pkg.id, data: payload });
+    } else {
+      createMutation.mutate(payload);
     }
   };
 
   return (
     <div className="overlay z-50" onClick={onClose}>
-      <div className="modal max-w-lg bg-zinc-950 border border-zinc-800 text-zinc-100 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
+      <div
+        className="modal max-w-lg shadow-lg text-primary"
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header px-6 py-4 flex justify-between items-center" style={{ borderBottom: '1px solid var(--border)' }}>
           <h2 className="modal-title text-lg font-bold">{isEdit ? 'Edit Bundled Package' : 'Create Bundled Package'}</h2>
           <button onClick={onClose} className="btn btn-ghost btn-icon p-1 hover:bg-zinc-800 rounded">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4 max-h-[75vh] overflow-y-auto">
           {/* Package Name */}
           <div className="form-group">
-            <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Package Bundle Name *</label>
+            <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Package Bundle Name *</label>
             <input
               type="text"
               placeholder="e.g. Small Business Marketing Bundle"
               value={form.name}
               onChange={(e) => { setForm(p => ({ ...p, name: e.target.value })); setErrors(p => ({ ...p, name: undefined })); }}
-              className={`form-input w-full bg-zinc-900 border text-sm rounded-lg px-3 py-2 outline-none ${errors.name ? 'border-red-500 focus:ring-red-500' : 'border-zinc-800 focus:ring-violet-500'}`}
+              className={`form-input ${errors.name ? 'error' : ''}`}
             />
-            {errors.name && <span className="text-red-500 text-xs mt-1 block">{errors.name}</span>}
+            {errors.name && <span className="text-danger text-xs mt-1 block">{errors.name}</span>}
           </div>
 
           {/* Description */}
           <div className="form-group">
-            <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Description</label>
+            <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Description</label>
             <textarea
               placeholder="Explain the scope and pricing benefits of this bundled package."
               rows={3}
               value={form.description}
               onChange={(e) => setForm(p => ({ ...p, description: e.target.value }))}
-              className="form-input w-full bg-zinc-900 border border-zinc-800 text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 outline-none resize-none"
+              className="form-input"
+              style={{ resize: 'none' }}
             />
           </div>
 
           {/* Discount Type & Value */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '1rem'
+            }}
+          >
             <div className="form-group">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Discount Model</label>
+              <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Discount Model</label>
               <select
                 value={form.discount_type}
                 onChange={(e) => setForm(p => ({ ...p, discount_type: e.target.value as 'percentage' | 'fixed' }))}
-                className="form-input w-full bg-zinc-900 border border-zinc-800 text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-violet-500 outline-none"
+                className="form-input"
               >
                 <option value="percentage">Percentage Discount (%)</option>
                 <option value="fixed">Fixed Price Discount (INR)</option>
@@ -786,45 +981,59 @@ function PackageFormModal({
             </div>
 
             <div className="form-group">
-              <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">Discount Value *</label>
+              <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">Discount Value *</label>
               <input
                 type="number"
                 placeholder="10"
                 value={form.discount_value || ''}
                 onChange={(e) => { setForm(p => ({ ...p, discount_value: Number(e.target.value) })); setErrors(p => ({ ...p, discount_value: undefined })); }}
-                className="form-input w-full bg-zinc-900 border border-zinc-800 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input"
               />
             </div>
           </div>
 
           {/* Services Checklist */}
           <div className="form-group">
-            <label className="form-label text-xs font-semibold text-zinc-400 mb-1.5 block">
+            <label className="form-label text-xs font-semibold text-secondary mb-1.5 block">
               Select Services to Bundle *
             </label>
             {errors.service_ids && (
-              <span className="text-red-500 text-xs mb-2 block">{errors.service_ids}</span>
+              <span className="text-danger text-xs mb-2 block">{errors.service_ids}</span>
             )}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 divide-y divide-zinc-800/60">
-              {servicesList.map(s => {
+            <div
+              className="rounded-lg p-3 max-h-48 overflow-y-auto"
+              style={{
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--border)'
+              }}
+            >
+              {servicesList.map((s, sIdx) => {
                 const checked = form.service_ids.includes(s.id);
+                const basePriceVal = s.base_price || 0;
                 return (
                   <div
                     key={s.id}
                     onClick={() => handleServiceToggle(s.id)}
-                    className="flex items-center gap-3 pt-2 first:pt-0 cursor-pointer hover:bg-zinc-850/40 p-1 rounded"
+                    className="flex items-center gap-3 cursor-pointer p-1.5 rounded"
+                    style={{
+                      borderTop: sIdx > 0 ? '1px solid var(--border-subtle)' : 'none',
+                      paddingTop: sIdx > 0 ? '8px' : '4px',
+                      transition: 'background var(--transition-fast)'
+                    }}
                   >
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                      checked
-                        ? 'bg-violet-600 border-violet-500 text-white'
-                        : 'border-zinc-700 bg-zinc-950 text-transparent'
-                    }`}>
-                      <Check size={10} strokeWidth={3} />
+                    <div
+                      className="w-4 h-4 rounded border flex items-center justify-center transition-all"
+                      style={{
+                        backgroundColor: checked ? 'var(--accent)' : 'transparent',
+                        borderColor: checked ? 'var(--accent)' : 'var(--text-muted)'
+                      }}
+                    >
+                      <Check size={10} strokeWidth={3} style={{ color: checked ? '#ffffff' : 'transparent' }} />
                     </div>
                     <div className="flex-1">
-                      <span className="text-xs font-medium text-zinc-200">{s.name}</span>
-                      <span className="text-[10px] text-zinc-500 block">
-                        {formatCurrency(s.base_price)} / {s.unit}
+                      <span className="text-xs font-medium text-primary">{s.name}</span>
+                      <span className="text-[10px] text-muted block" style={{ display: 'block' }}>
+                        {formatCurrency(basePriceVal)} / {s.unit}
                       </span>
                     </div>
                   </div>
@@ -833,7 +1042,7 @@ function PackageFormModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+          <div className="flex justify-end gap-3 pt-4" style={{ borderTop: '1px solid var(--border)', marginTop: '0.5rem' }}>
             <button type="button" className="btn btn-secondary text-xs" onClick={onClose}>Cancel</button>
             <button
               id="package-form-submit"

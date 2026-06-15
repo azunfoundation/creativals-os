@@ -9,9 +9,12 @@ use App\Http\Resources\TaskResource;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\Timesheet;
+use App\Models\NotificationPreference;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\TaskAssignedMail;
 
 class TaskController extends Controller
 {
@@ -85,6 +88,19 @@ class TaskController extends Controller
         $task = Task::create($validated);
         $task->load(['project', 'assignee', 'milestone']);
 
+        if ($task->assigned_to && $task->assignee) {
+            $pref = NotificationPreference::where('user_id', $task->assigned_to)
+                ->where('event_type', 'task_assigned')
+                ->first();
+            if ($pref && $pref->email && $task->assignee->email) {
+                try {
+                    Mail::to($task->assignee->email)->send(new TaskAssignedMail($task));
+                } catch (\Throwable $e) {
+                    // Ignore mail errors
+                }
+            }
+        }
+
         return (new TaskResource($task))->response()->setStatusCode(201);
     }
 
@@ -133,8 +149,22 @@ class TaskController extends Controller
             $validated = collect($validated)->only(['status', 'completion_percentage'])->toArray();
         }
 
+        $originalAssigneeId = $task->getOriginal('assigned_to');
         $task->update($validated);
         $task->load(['project', 'assignee', 'milestone']);
+
+        if ($task->assigned_to && $task->assigned_to !== $originalAssigneeId && $task->assignee) {
+            $pref = NotificationPreference::where('user_id', $task->assigned_to)
+                ->where('event_type', 'task_assigned')
+                ->first();
+            if ($pref && $pref->email && $task->assignee->email) {
+                try {
+                    Mail::to($task->assignee->email)->send(new TaskAssignedMail($task));
+                } catch (\Throwable $e) {
+                    // Ignore mail errors
+                }
+            }
+        }
 
         return (new TaskResource($task))->response();
     }
