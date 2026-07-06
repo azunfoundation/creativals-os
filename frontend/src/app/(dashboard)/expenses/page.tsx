@@ -337,7 +337,7 @@ export default function ExpensesDashboard() {
 
   const approveExpenseMutation = useMutation({
     mutationFn: ({ id, action, notes }: { id: number; action: 'approve' | 'reject'; notes?: string }) =>
-      expensesApi.approveExpense(id, action, notes),
+      action === 'approve' ? expensesApi.approveExpense(id) : expensesApi.rejectExpense(id, notes),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
     },
