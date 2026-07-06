@@ -27,6 +27,7 @@ class User extends Authenticatable
         'last_login_at',
         'last_login_ip',
         'is_client_portal_user',
+        'must_change_password',
     ];
 
     protected $hidden = [
@@ -41,6 +42,7 @@ class User extends Authenticatable
             'last_login_at'     => 'datetime',
             'password'          => 'hashed',
             'is_client_portal_user' => 'boolean',
+            'must_change_password'  => 'boolean',
         ];
     }
 

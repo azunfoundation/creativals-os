@@ -1,0 +1,7 @@
+# Root-level gitignore
+*.log
+.DS_Store
+credentials_backup.txt
+composer
+
+user_inputs.txt

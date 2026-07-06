@@ -332,7 +332,7 @@ export const users = {
     api.delete(`/users/${id}`),
 
   syncRoles: (id: number, roleIds: number[]) =>
-    api.post(`/users/${id}/sync-roles`, { role_ids: roleIds }),
+    api.put(`/users/${id}/roles`, { role_ids: roleIds }),
 };
 
 // ============================================================
@@ -682,17 +682,14 @@ export const packages = {
 // Coupons API
 // ============================================================
 export const coupons = {
-  list: () => api.get<Coupon[]>('/coupons'),
-  create: (data: Partial<Coupon>) => api.post<Coupon>('/coupons', data),
-  update: (id: number, data: Partial<Coupon>) => api.put<Coupon>(`/coupons/${id}`, data),
-  delete: (id: number) => api.delete(`/coupons/${id}`),
+  list: () => api.get<Coupon[]>('/discount-coupons'),
+  create: (data: Partial<Coupon>) => api.post<Coupon>('/discount-coupons', data),
+  update: (id: number, data: Partial<Coupon>) => api.put<Coupon>(`/discount-coupons/${id}`, data),
+  delete: (id: number) => api.delete(`/discount-coupons/${id}`),
   validate: (code: string, amount: number) =>
-    api.post<CouponValidationResponse>('/coupons/validate', { code, amount }),
+    api.get<CouponValidationResponse>(`/discount-coupons/${code}/validate`, { params: { amount } }),
 };
 
-// ============================================================
-// Quotes API
-// ============================================================
 // ============================================================
 // Quotes API
 // ============================================================
@@ -1276,14 +1273,14 @@ export interface ProjectCostAllocation {
 }
 
 export const payroll = {
-  listRuns: (params?: any) => api.get<{ data: PayrollRun[]; meta?: PaginationMeta }>('/payroll-runs', { params }),
-  generateRun: (data: { year: number; month: number; notes?: string }) => api.post<PayrollRun>('/payroll-runs/generate', data),
-  getRunDetails: (id: number) => api.get<PayrollRun>(`/payroll-runs/${id}`),
-  approveRun: (id: number, notes?: string) => api.post<PayrollRun>(`/payroll-runs/${id}/approve`, { notes }),
-  costAllocation: (id: number) => api.get<ProjectCostAllocation[]>(`/payroll-runs/${id}/cost-allocation`),
-  myHistory: (params?: any) => api.get<{ data: PayrollRunItem[]; meta?: PaginationMeta }>('/payroll-runs/my-history', { params }),
-  downloadPayslip: (itemId: number) => api.get<Blob>(`/payroll-runs/items/${itemId}/pdf`, { responseType: 'blob' }),
-  exportRun: (runId: number, format: 'csv' | 'pdf') => api.get<Blob>(`/payroll-runs/${runId}/export`, { params: { format }, responseType: 'blob' }),
+  listRuns: (params?: any) => api.get<{ data: PayrollRun[]; meta?: PaginationMeta }>('/payroll/runs', { params }),
+  generateRun: (data: { year: number; month: number; notes?: string }) => api.post<PayrollRun>('/payroll/runs', data),
+  getRunDetails: (id: number) => api.get<PayrollRun>(`/payroll/runs/${id}`),
+  approveRun: (id: number, notes?: string) => api.post<PayrollRun>(`/payroll/runs/${id}/approve`, { notes }),
+  costAllocation: () => api.get<ProjectCostAllocation[]>('/payroll/cost-allocation'),
+  myHistory: (params?: any) => api.get<{ data: PayrollRunItem[]; meta?: PaginationMeta }>('/payroll/my-history', { params }),
+  downloadPayslip: (itemId: number) => api.get<Blob>(`/payroll/items/${itemId}/download-payslip`, { responseType: 'blob' }),
+  exportRun: (runId: number, format: 'csv' | 'pdf') => api.get<Blob>(`/payroll/runs/${runId}/export`, { params: { format }, responseType: 'blob' }),
 };
 
 export const expenses = {
@@ -1291,7 +1288,8 @@ export const expenses = {
   createExpense: (data: any) => api.post<Expense>('/expenses', data),
   updateExpense: (id: number, data: any) => api.put<Expense>(`/expenses/${id}`, data),
   deleteExpense: (id: number) => api.delete(`/expenses/${id}`),
-  approveExpense: (id: number, action: 'approve' | 'reject', notes?: string) => api.post<Expense>(`/expenses/${id}/approve`, { action, notes }),
+  approveExpense: (id: number) => api.post<Expense>(`/expenses/${id}/approve`),
+  rejectExpense: (id: number, notes?: string) => api.post<Expense>(`/expenses/${id}/reject`, { notes }),
 };
 
 export const vendors = {
