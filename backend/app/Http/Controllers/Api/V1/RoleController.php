@@ -201,12 +201,13 @@ class RoleController extends Controller
     private function formatRole(Role $role): array
     {
         return [
-            'id'          => $role->id,
-            'name'        => $role->name,
-            'guard_name'  => $role->guard_name,
-            'description' => $role->description ?? null,
-            'users_count' => $role->users_count ?? 0,
-            'permissions' => $role->permissions->map(fn ($p) => [
+            'id'           => $role->id,
+            'name'         => $role->name,
+            'display_name' => ucwords(str_replace('_', ' ', $role->name)),
+            'guard_name'   => $role->guard_name,
+            'description'  => $role->description ?? null,
+            'users_count'  => $role->users_count ?? 0,
+            'permissions'  => $role->permissions->map(fn ($p) => [
                 'id'         => $p->id,
                 'name'       => $p->name,
                 'guard_name' => $p->guard_name,

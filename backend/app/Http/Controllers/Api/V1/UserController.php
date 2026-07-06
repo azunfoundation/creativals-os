@@ -27,7 +27,7 @@ class UserController extends Controller
             ->when($request->department_id, fn($q, $v) =>
                 $q->whereHas('departments', fn($dq) => $dq->where('departments.id', $v))
             )
-            ->when($request->role, fn($q, $v) => $q->role($v))
+            ->when($request->role_id, fn($q, $v) => $q->whereHas('roles', fn($rq) => $rq->where('roles.id', $v)))
             ->when($request->search, fn($q, $v) =>
                 $q->where(fn($sq) =>
                     $sq->where('name', 'like', "%{$v}%")

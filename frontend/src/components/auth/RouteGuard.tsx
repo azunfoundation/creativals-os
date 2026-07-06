@@ -5,15 +5,20 @@ import { useAuthStore } from '@/store/auth';
 
 export function RouteGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, isLoading, loadUser } = useAuthStore();
+  const { isLoading, loadUser } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Run ONCE on mount to validate the stored token.
+  // Do NOT include `user` in deps — re-running on every user update
+  // causes a /auth/me loop that can log the user out on transient errors.
   useEffect(() => {
     const initAuth = async () => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-      
+
       if (token) {
-        if (!user) {
+        // Only call loadUser if we don't already have the user in state
+        if (!useAuthStore.getState().user) {
           await loadUser();
         }
         const currentUser = useAuthStore.getState().user;
@@ -29,7 +34,8 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     };
 
     initAuth();
-  }, [user, loadUser, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — only run on mount
 
   if (isLoading || (!isInitialized && !user)) {
     return (
@@ -53,3 +59,4 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+

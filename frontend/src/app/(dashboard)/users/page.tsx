@@ -1,24 +1,30 @@
 'use client';
 
-import { useState, useCallback } from 'react'; 
+import { useState } from 'react'; 
 import { SkeletonTable } from '@/components/ui/Skeleton'; 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Edit2, Trash2, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ChevronLeft, ChevronRight, Filter, AlertTriangle } from 'lucide-react';
 import { users as usersApi, roles as rolesApi, departments as deptApi } from '@/lib/api';
+import { useToast } from '@/hooks/useToast';
 import type { User, Role, Department } from '@/lib/api';
-import { getInitials, formatDate } from '@/lib/utils';
+import { getInitials } from '@/lib/utils';
 import UserFormModal from './components/UserFormModal';
 
 // ── Role Colors ────────────────────────────────────────────────
 const ROLE_COLOR_MAP: Record<string, { bg: string; color: string }> = {
   founder:          { bg: 'rgba(124,58,237,0.15)', color: '#a78bfa' },
   admin:            { bg: 'rgba(59,130,246,0.15)', color: '#60a5fa' },
+  director:         { bg: 'rgba(99,102,241,0.15)', color: '#818cf8' },
+  sales_head:       { bg: 'rgba(234,179,8,0.15)',  color: '#facc15' },
+  sales_exec:       { bg: 'rgba(249,115,22,0.15)', color: '#fb923c' },
   project_manager:  { bg: 'rgba(16,185,129,0.15)', color: '#34d399' },
   designer:         { bg: 'rgba(245,158,11,0.15)', color: '#fbbf24' },
   developer:        { bg: 'rgba(239,68,68,0.15)',  color: '#f87171' },
   hr:               { bg: 'rgba(236,72,153,0.15)', color: '#f472b6' },
   accounts:         { bg: 'rgba(20,184,166,0.15)', color: '#2dd4bf' },
+  finance:          { bg: 'rgba(14,165,233,0.15)', color: '#38bdf8' },
+  employee:         { bg: 'rgba(107,114,128,0.15)',color: '#9ca3af' },
 };
 
 function RoleBadge({ role }: { role: Role }) {
@@ -42,42 +48,15 @@ function RoleBadge({ role }: { role: Role }) {
 function StatusBadge({ status }: { status: 'active' | 'inactive' }) {
   return (
     <span className={`badge ${status === 'active' ? 'badge-success' : 'badge-muted'}`}>
-      {status}
+      {status.toUpperCase()}
     </span>
   );
 }
 
-// ── Mock data for when API is unavailable ─────────────────────
-const MOCK_USERS: User[] = [
-  { id: 1, name: 'Rahul Sharma', email: 'rahul@creativals.in', employee_id: 'CRE001', roles: [{ id: 1, name: 'founder', display_name: 'Founder' }], departments: [{ id: 1, name: 'Leadership' }], status: 'active', permissions: [], avatar_url: null, phone: '+91 98765 43210' },
-  { id: 2, name: 'Priya Singh', email: 'priya@creativals.in', employee_id: 'CRE002', roles: [{ id: 3, name: 'project_manager', display_name: 'Project Manager' }], departments: [{ id: 2, name: 'Projects' }], status: 'active', permissions: [], avatar_url: null },
-  { id: 3, name: 'Arjun Kumar', email: 'arjun@creativals.in', employee_id: 'CRE003', roles: [{ id: 4, name: 'designer', display_name: 'Designer' }], departments: [{ id: 3, name: 'Design' }], status: 'active', permissions: [], avatar_url: null },
-  { id: 4, name: 'Meera Reddy', email: 'meera@creativals.in', employee_id: 'CRE004', roles: [{ id: 5, name: 'developer', display_name: 'Developer' }], departments: [{ id: 3, name: 'Design' }], status: 'active', permissions: [], avatar_url: null },
-  { id: 5, name: 'Vikram Nair', email: 'vikram@creativals.in', employee_id: 'CRE005', roles: [{ id: 7, name: 'accounts', display_name: 'Accounts' }], departments: [{ id: 4, name: 'Finance' }], status: 'inactive', permissions: [], avatar_url: null },
-  { id: 6, name: 'Anjali Patel', email: 'anjali@creativals.in', employee_id: 'CRE006', roles: [{ id: 6, name: 'hr', display_name: 'HR Manager' }], departments: [{ id: 5, name: 'HR' }], status: 'active', permissions: [], avatar_url: null },
-];
-
-const MOCK_ROLES: Role[] = [
-  { id: 1, name: 'founder', display_name: 'Founder' },
-  { id: 2, name: 'admin', display_name: 'Admin' },
-  { id: 3, name: 'project_manager', display_name: 'Project Manager' },
-  { id: 4, name: 'designer', display_name: 'Designer' },
-  { id: 5, name: 'developer', display_name: 'Developer' },
-  { id: 6, name: 'hr', display_name: 'HR Manager' },
-  { id: 7, name: 'accounts', display_name: 'Accounts' },
-];
-
-const MOCK_DEPTS: Department[] = [
-  { id: 1, name: 'Leadership', members_count: 1 },
-  { id: 2, name: 'Projects', members_count: 3 },
-  { id: 3, name: 'Design', members_count: 4 },
-  { id: 4, name: 'Finance', members_count: 2 },
-  { id: 5, name: 'HR', members_count: 1 },
-];
-
 // ── Page ───────────────────────────────────────────────────────
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -88,40 +67,44 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
-  // Fetch users (fallback to mock)
-  const { data: usersData, isLoading } = useQuery({
+  // ── Fetch users from real API ──────────────────────────────
+  const {
+    data: usersData,
+    isLoading,
+    isError,
+    error: usersError,
+  } = useQuery({
     queryKey: ['users', { search, statusFilter, deptFilter, roleFilter, page }],
     queryFn: async () => {
-      try {
-        const res = await usersApi.list({ search, status: statusFilter, page, per_page: 10 });
-        return res.data;
-      } catch {
-        return { data: MOCK_USERS, meta: { current_page: 1, last_page: 1, per_page: 10, total: MOCK_USERS.length } };
-      }
+      const res = await usersApi.list({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        department_id: deptFilter ? Number(deptFilter) : undefined,
+        role_id: roleFilter ? Number(roleFilter) : undefined,
+        page,
+        per_page: 25,
+      });
+      return res.data;
     },
   });
 
+  // ── Fetch roles for filter & form ──────────────────────────
   const { data: rolesData } = useQuery({
     queryKey: ['roles'],
     queryFn: async () => {
-      try {
-        const res = await rolesApi.list();
-        const payload = res.data as any;
-        // API may return paginated { data: Role[] } or a plain array
-        return (Array.isArray(payload) ? payload : (payload?.data ?? [])) as Role[];
-      } catch { return MOCK_ROLES; }
+      const res = await rolesApi.list();
+      const payload = res.data as any;
+      return (Array.isArray(payload) ? payload : (payload?.data ?? [])) as Role[];
     },
   });
 
+  // ── Fetch departments for filter & form ────────────────────
   const { data: deptsData } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
-      try {
-        const res = await deptApi.list();
-        const payload = res.data as any;
-        // API may return paginated { data: Department[] } or a plain array
-        return (Array.isArray(payload) ? payload : (payload?.data ?? [])) as Department[];
-      } catch { return MOCK_DEPTS; }
+      const res = await deptApi.list();
+      const payload = res.data as any;
+      return (Array.isArray(payload) ? payload : (payload?.data ?? [])) as Department[];
     },
   });
 
@@ -130,20 +113,19 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setDeleteConfirm(null);
+      showToast('User deleted successfully.', 'success');
+    },
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ||
+        'Failed to delete user. You may not have permission.';
+      showToast(message, 'error');
+      setDeleteConfirm(null);
     },
   });
 
-  const displayUsers: User[] = usersData?.data || MOCK_USERS;
-  const meta = usersData?.meta || { current_page: 1, last_page: 1, total: MOCK_USERS.length };
-
-  // Client-side filter when using mock data
-  const filteredUsers = displayUsers.filter((u) => {
-    if (search && !u.name.toLowerCase().includes(search.toLowerCase()) && !u.email.toLowerCase().includes(search.toLowerCase())) return false;
-    if (statusFilter && u.status !== statusFilter) return false;
-    if (deptFilter && !u.departments.some((d) => d.id === Number(deptFilter))) return false;
-    if (roleFilter && !u.roles.some((r) => r.id === Number(roleFilter))) return false;
-    return true;
-  });
+  const displayUsers: User[] = usersData?.data || [];
+  const meta = usersData?.meta || { current_page: 1, last_page: 1, total: 0 };
 
   const handleEdit = (user: User) => {
     setEditUser(user);
@@ -221,7 +203,7 @@ export default function UsersPage() {
           style={{ width: 160 }}
         >
           <option value="">All departments</option>
-          {(deptsData || MOCK_DEPTS).map((d) => (
+          {(deptsData || []).map((d) => (
             <option key={d.id} value={d.id}>{d.name}</option>
           ))}
         </select>
@@ -235,17 +217,41 @@ export default function UsersPage() {
           style={{ width: 160 }}
         >
           <option value="">All roles</option>
-          {(rolesData || MOCK_ROLES).map((r) => (
+          {(rolesData || []).map((r) => (
             <option key={r.id} value={r.id}>{r.display_name}</option>
           ))}
         </select>
       </div>
+      
+      {/* API Error Banner */}
+      {isError && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+          padding: '0.875rem 1rem',
+          background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.3)',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '1rem',
+          color: 'var(--danger)',
+          fontSize: '0.875rem',
+        }}>
+          <AlertTriangle size={16} />
+          <span>
+            Failed to load users: {(usersError as any)?.response?.data?.message || (usersError as any)?.message || 'Unknown error'}
+          </span>
+        </div>
+      )}
 
       {/* Table */}
       <div className="data-table-wrap">
         {isLoading ? (
           <SkeletonTable rows={5} cols={5} />
-        ) : filteredUsers.length === 0 ? (
+        ) : isError ? (
+          <EmptyState
+            title="Could not load users"
+            description="There was an error fetching users from the server. Please check your connection or permissions."
+          />
+        ) : displayUsers.length === 0 ? (
           <EmptyState
             title="No users found"
             description="Adjust your filters or invite a new user to get started."
@@ -264,7 +270,7 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user) => (
+              {displayUsers.map((user) => (
                 <tr key={user.id}>
                   {/* Avatar + Name */}
                   <td>
@@ -284,11 +290,14 @@ export default function UsersPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
-                      {user.roles.map((r) => <RoleBadge key={r.id} role={r} />)}
+                      {user.roles.length > 0 
+                        ? user.roles.map((r) => <RoleBadge key={r.id} role={r} />)
+                        : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>
+                      }
                     </div>
                   </td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                    {user.departments[0]?.name || '—'}
+                    {user.departments && user.departments.length > 0 ? user.departments[0].name : '—'}
                   </td>
                   <td><StatusBadge status={user.status} /></td>
                   <td>
@@ -306,6 +315,7 @@ export default function UsersPage() {
                         onClick={() => setDeleteConfirm(user.id)}
                         className="btn btn-danger btn-sm btn-icon"
                         title="Delete user"
+                        disabled={deleteMutation.isPending}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -319,14 +329,14 @@ export default function UsersPage() {
       </div>
 
       {/* Pagination */}
-      {meta.last_page > 1 && (
+      {!isLoading && !isError && meta.last_page > 1 && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           marginTop: '1rem',
           padding: '0 0.25rem',
         }}>
           <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-            Showing {filteredUsers.length} of {meta.total} users
+            Showing {displayUsers.length} of {meta.total} users
           </span>
           <div style={{ display: 'flex', gap: '0.375rem' }}>
             <button
@@ -374,10 +384,17 @@ export default function UsersPage() {
               </p>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleteMutation.isPending}
+              >
+                Cancel
+              </button>
               <button
                 className="btn btn-danger"
                 style={{ background: 'var(--danger)', color: '#fff' }}
+                disabled={deleteMutation.isPending}
                 onClick={() => deleteMutation.mutate(deleteConfirm)}
               >
                 {deleteMutation.isPending ? 'Deleting…' : 'Delete User'}
@@ -391,12 +408,13 @@ export default function UsersPage() {
       {modalOpen && (
         <UserFormModal
           user={editUser}
-          roles={rolesData || MOCK_ROLES}
-          departments={deptsData || MOCK_DEPTS}
+          roles={rolesData || []}
+          departments={deptsData || []}
           onClose={handleCloseModal}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
             handleCloseModal();
+            showToast(editUser ? 'User updated successfully.' : 'User invited successfully.', 'success');
           }}
         />
       )}

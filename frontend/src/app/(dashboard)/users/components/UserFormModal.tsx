@@ -74,7 +74,10 @@ export default function UserFormModal({ user, roles, departments, onClose, onSuc
       }),
     onSuccess,
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create user.';
+      const resp = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data;
+      // Prefer the first field-level validation message, fall back to top-level message
+      const firstFieldError = resp?.errors ? Object.values(resp.errors).flat()[0] : undefined;
+      const msg = firstFieldError || resp?.message || 'Failed to create user. Please check your inputs and try again.';
       setErrors((p) => ({ ...p, server: msg }));
     },
   });
@@ -92,7 +95,9 @@ export default function UserFormModal({ user, roles, departments, onClose, onSuc
       }),
     onSuccess,
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to update user.';
+      const resp = (err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data;
+      const firstFieldError = resp?.errors ? Object.values(resp.errors).flat()[0] : undefined;
+      const msg = firstFieldError || resp?.message || 'Failed to update user. Please check your inputs and try again.';
       setErrors((p) => ({ ...p, server: msg }));
     },
   });

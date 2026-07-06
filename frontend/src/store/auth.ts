@@ -103,11 +103,19 @@ export const useAuthStore = create<AuthState>()(
           const response = await authApi.me();
           const user = response.data as unknown as User;
           set({ user, isAuthenticated: true, isLoading: false, token });
-        } catch {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('auth_token');
+        } catch (err: unknown) {
+          const status = (err as { response?: { status?: number } })?.response?.status;
+          // Only treat a real 401 Unauthorized as an expired session.
+          // Transient errors (network timeouts, 500s) should NOT log the user out.
+          if (status === 401) {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('auth_token');
+            }
+            set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+          } else {
+            // Keep the existing token/user — just stop loading
+            set({ isLoading: false });
           }
-          set({ user: null, token: null, isAuthenticated: false, isLoading: false });
         }
       },
 
