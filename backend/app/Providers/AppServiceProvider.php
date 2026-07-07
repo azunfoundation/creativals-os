@@ -44,6 +44,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Register policies explicitly in case auto-discovery is off
         Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(Role::class, \App\Policies\RolePolicy::class);
         Gate::policy(Department::class, DepartmentPolicy::class);
         Gate::policy(Lead::class, LeadPolicy::class);
         Gate::policy(Quote::class, QuotePolicy::class);
