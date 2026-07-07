@@ -16,9 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Token-based auth via Bearer tokens (localStorage) — statefulApi() not needed
         // Trust all proxies on Oracle Cloud (Apache reverse proxy)
         $middleware->trustProxies(at: '*');
-        // Ensure JSON bodies are merged under Apache mod_php (raw body arrives in
-        // php://input but is not auto-populated into the request input bag)
-        $middleware->append(\App\Http\Middleware\ParseJsonBody::class);
+        // Ensure JSON bodies are merged under Apache mod_php — prepend to run first
+        $middleware->prepend(\App\Http\Middleware\ParseJsonBody::class);
+        // Also attach to the 'api' middleware group as a safety net
+        $middleware->appendToGroup('api', \App\Http\Middleware\ParseJsonBody::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
