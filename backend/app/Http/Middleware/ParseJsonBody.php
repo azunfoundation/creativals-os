@@ -18,9 +18,13 @@ class ParseJsonBody
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->isJson() && empty($request->all())) {
+        // Under Apache mod_php, $_SERVER['CONTENT_TYPE'] can be corrupted and
+        // $request->isJson() may return false for application/json requests.
+        // To be safe: whenever the input bag is empty but there is a request body,
+        // attempt to parse it as JSON and merge the result.
+        if (empty($request->all())) {
             $content = $request->getContent();
-            if (!empty($content)) {
+            if (!empty($content) && $content[0] === '{') {
                 $json = json_decode($content, true);
                 if (is_array($json) && json_last_error() === JSON_ERROR_NONE) {
                     $request->merge($json);
