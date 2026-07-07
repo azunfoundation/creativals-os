@@ -270,7 +270,7 @@ export default function PayrollDashboard() {
     enabled: !!selectedRunId && activeTab === 'cost_allocation',
     queryFn: async () => {
       try {
-        const res = await payrollApi.costAllocation(selectedRunId!);
+        const res = await payrollApi.costAllocation();
         return res.data;
       } catch {
         return localCostAllocations[selectedRunId!] || [];
