@@ -176,14 +176,14 @@ class ReportController extends Controller
         $quoteStats = DB::table('quotes')
             ->select(
                 DB::raw('count(id) as total_quotes'),
-                DB::raw('sum(case when status = "draft" then 1 else 0 end) as draft_count'),
-                DB::raw('sum(case when status = "pending" then 1 else 0 end) as pending_count'),
-                DB::raw('sum(case when status = "approved" then 1 else 0 end) as approved_count'),
-                DB::raw('sum(case when status = "sent" then 1 else 0 end) as sent_count'),
-                DB::raw('sum(case when status = "converted" then 1 else 0 end) as won_count'),
-                DB::raw('sum(case when status = "rejected" then 1 else 0 end) as rejected_count'),
+                DB::raw('sum(case when status = 'draft' then 1 else 0 end) as draft_count'),
+                DB::raw('sum(case when status = 'pending' then 1 else 0 end) as pending_count'),
+                DB::raw('sum(case when status = 'approved' then 1 else 0 end) as approved_count'),
+                DB::raw('sum(case when status = 'sent' then 1 else 0 end) as sent_count'),
+                DB::raw('sum(case when status = 'converted' then 1 else 0 end) as won_count'),
+                DB::raw('sum(case when status = 'rejected' then 1 else 0 end) as rejected_count'),
                 DB::raw('avg(total_amount) as avg_quote_value'),
-                DB::raw('sum(case when status in ("approved", "sent", "converted") then total_amount else 0 end) as total_quote_value')
+                DB::raw('sum(case when status in ('approved', 'sent', 'converted') then total_amount else 0 end) as total_quote_value')
             )
             ->whereNull('deleted_at')
             ->whereBetween('created_at', [$from->startOfDay(), $to->endOfDay()])
@@ -702,7 +702,7 @@ class ReportController extends Controller
                 $quoteStats = DB::table('quotes')
                     ->select(
                         DB::raw('count(id) as total_quotes'),
-                        DB::raw('sum(case when status = "pending" then 1 else 0 end) as pending_count')
+                        DB::raw('sum(case when status = 'pending' then 1 else 0 end) as pending_count')
                     )
                     ->whereNull('deleted_at')
                     ->whereBetween('created_at', [$thisMonthFrom->startOfDay(), $thisMonthTo->endOfDay()])

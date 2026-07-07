@@ -94,9 +94,9 @@ class UserController extends Controller
         }
 
         try {
-            Mail::to($user->email)->send(new WelcomeUserMail($user, $validated['password']));
+            Mail::to($user->email)->queue(new WelcomeUserMail($user, $validated['password']));
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('Failed to send welcome email to ' . $user->email . ': ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error('Failed to queue welcome email to ' . $user->email . ': ' . $e->getMessage());
         }
 
         return response()->json([

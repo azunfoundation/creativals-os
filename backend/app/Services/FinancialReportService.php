@@ -24,7 +24,7 @@ class FinancialReportService
         $invoiceStats = DB::table('invoices')
             ->select(
                 DB::raw('count(id) as invoice_count'),
-                DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then total_amount * exchange_rate else 0 end) as total_invoiced'),
+                DB::raw('sum(case when status in ("' . implode("','"), $revenueStatuses) . '") then total_amount * exchange_rate else 0 end) as total_invoiced'),
                 DB::raw('sum(paid_amount * exchange_rate) as total_collected'),
                 DB::raw('sum(due_amount * exchange_rate) as total_outstanding'),
                 DB::raw('avg(total_amount * exchange_rate) as avg_invoice_value')
@@ -46,8 +46,8 @@ class FinancialReportService
         // ── 2. Monthly Trend (last 12 months or range months) ──────────────────
         $trendResults = DB::table('invoices')
             ->select(
-                DB::raw('strftime("%Y-%m", issue_date) as month_key'),
-                DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then total_amount * exchange_rate else 0 end) as invoiced_amount'),
+                DB::raw('to_char(issue_date, 'YYYY-MM') as month_key'),
+                DB::raw('sum(case when status in ("' . implode("','"), $revenueStatuses) . '") then total_amount * exchange_rate else 0 end) as invoiced_amount'),
                 DB::raw('sum(paid_amount * exchange_rate) as collected_amount')
             )
             ->whereNull('deleted_at')
@@ -62,7 +62,7 @@ class FinancialReportService
             ->select(
                 'users.id as client_id',
                 'users.name as client_name',
-                DB::raw('sum(case when invoices.status in ("' . implode('","', $revenueStatuses) . '") then invoices.total_amount * invoices.exchange_rate else 0 end) as total_billed'),
+                DB::raw('sum(case when invoices.status in ("' . implode("','"), $revenueStatuses) . '") then invoices.total_amount * invoices.exchange_rate else 0 end) as total_billed'),
                 DB::raw('sum(invoices.paid_amount * invoices.exchange_rate) as total_paid'),
                 DB::raw('sum(invoices.due_amount * invoices.exchange_rate) as outstanding')
             )
@@ -106,9 +106,9 @@ class FinancialReportService
             ->select(
                 DB::raw('count(expenses.id) as expense_count'),
                 DB::raw('sum(expenses.amount * currencies.exchange_rate_to_inr) as total_submitted'),
-                DB::raw('sum(case when expenses.status in ("approved", "reimbursed") then expenses.amount * currencies.exchange_rate_to_inr else 0 end) as total_approved'),
-                DB::raw('sum(case when expenses.status = "submitted" then expenses.amount * currencies.exchange_rate_to_inr else 0 end) as total_pending'),
-                DB::raw('sum(case when expenses.status = "rejected" then expenses.amount * currencies.exchange_rate_to_inr else 0 end) as total_rejected')
+                DB::raw('sum(case when expenses.status in ('approved', 'reimbursed') then expenses.amount * currencies.exchange_rate_to_inr else 0 end) as total_approved'),
+                DB::raw('sum(case when expenses.status = 'submitted' then expenses.amount * currencies.exchange_rate_to_inr else 0 end) as total_pending'),
+                DB::raw('sum(case when expenses.status = 'rejected' then expenses.amount * currencies.exchange_rate_to_inr else 0 end) as total_rejected')
             )
             ->whereNull('expenses.deleted_at')
             ->whereBetween('expenses.expense_date', [$from->toDateString(), $to->toDateString()])
@@ -171,8 +171,8 @@ class FinancialReportService
         $trend = DB::table('expenses')
             ->join('currencies', 'expenses.currency_id', '=', 'currencies.id')
             ->select(
-                DB::raw('strftime("%Y-%m", expenses.expense_date) as month_key'),
-                DB::raw('sum(case when expenses.status in ("approved", "reimbursed") then expenses.amount * currencies.exchange_rate_to_inr else 0 end) as approved_amount'),
+                DB::raw('to_char(expenses.expense_date, 'YYYY-MM') as month_key'),
+                DB::raw('sum(case when expenses.status in ('approved', 'reimbursed') then expenses.amount * currencies.exchange_rate_to_inr else 0 end) as approved_amount'),
                 DB::raw('sum(expenses.amount * currencies.exchange_rate_to_inr) as submitted_amount')
             )
             ->whereNull('expenses.deleted_at')
@@ -331,9 +331,9 @@ class FinancialReportService
         $invoiceStatsMap = DB::table('invoices')
             ->select(
                 'client_id',
-                DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then total_amount * exchange_rate else 0 end) as total_billed'),
-                DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then paid_amount * exchange_rate else 0 end) as total_paid'),
-                DB::raw('sum(case when status in ("' . implode('","', $revenueStatuses) . '") then due_amount * exchange_rate else 0 end) as total_outstanding'),
+                DB::raw('sum(case when status in ("' . implode("','"), $revenueStatuses) . '") then total_amount * exchange_rate else 0 end) as total_billed'),
+                DB::raw('sum(case when status in ("' . implode("','"), $revenueStatuses) . '") then paid_amount * exchange_rate else 0 end) as total_paid'),
+                DB::raw('sum(case when status in ("' . implode("','"), $revenueStatuses) . '") then due_amount * exchange_rate else 0 end) as total_outstanding'),
                 DB::raw('max(issue_date) as last_invoice_date')
             )
             ->whereIn('client_id', $clientIds)
