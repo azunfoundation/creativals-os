@@ -18,7 +18,7 @@ class ParseJsonBody
 {
     public function handle(Request $request, Closure $next): Response
     {
-        error_log("ParseJsonBody RUNNING for " . $request->path() . ", method: " . $request->method());
+        \Illuminate\Support\Facades\Log::info("ParseJsonBody RUNNING for " . $request->path() . ", method: " . $request->method());
         // Under Apache mod_php, $_SERVER['CONTENT_TYPE'] can be corrupted and
         // $request->isJson() may return false for application/json requests.
         // To be safe: whenever the input bag is empty but there is a request body,
