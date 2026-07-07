@@ -13,8 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->statefulApi();
-        // Trust all proxies on Oracle Cloud (nginx reverse proxy)
+        // Token-based auth via Bearer tokens (localStorage) — statefulApi() not needed
+        // Trust all proxies on Oracle Cloud (Apache reverse proxy)
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
