@@ -96,7 +96,7 @@ class UserController extends Controller
         try {
             Mail::to($user->email)->send(new WelcomeUserMail($user, $validated['password']));
         } catch (\Throwable $e) {
-            // Ignore dynamic mail connection failures so the user creation is still successful
+            \Illuminate\Support\Facades\Log::error('Failed to send welcome email to ' . $user->email . ': ' . $e->getMessage());
         }
 
         return response()->json([
