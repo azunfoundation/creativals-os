@@ -48,10 +48,10 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'name'                   => ['required', 'string', 'max:255'],
-            'email'                  => ['required', 'email', 'unique:users'],
+            'email'                  => ['required', 'email', Rule::unique('users')->whereNull('deleted_at')],
             'password'               => ['required', 'string', 'min:8'],
             'phone'                  => ['nullable', 'string', 'max:20'],
-            'employee_id'            => ['nullable', 'string', 'unique:users,employee_id'],
+            'employee_id'            => ['nullable', 'string', Rule::unique('users', 'employee_id')->whereNull('deleted_at')],
             'status'                 => ['nullable', Rule::in(['active', 'inactive'])],
             'role_ids'               => ['nullable', 'array'],
             'role_ids.*'             => ['exists:roles,id'],
