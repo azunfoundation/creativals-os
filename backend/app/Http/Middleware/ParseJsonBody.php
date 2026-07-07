@@ -28,7 +28,7 @@ class ParseJsonBody
             \Illuminate\Support\Facades\Log::error("ParseJsonBody: php_input_len=" . strlen((string)$content));
             if (!empty($content) && $content[0] === '{') {
                 $json = json_decode($content, true);
-                \Illuminate\Support\Facades\Log::error("ParseJsonBody: json_decoded=" . json_encode($json));
+                \Illuminate\Support\Facades\Log::error("ParseJsonBody: raw_content=[" . $content . "], decode_error=" . json_last_error_msg());
                 if (is_array($json) && json_last_error() === JSON_ERROR_NONE) {
                     $request->merge($json);
                     \Illuminate\Support\Facades\Log::error("ParseJsonBody: after_merge=" . json_encode($request->all()));
