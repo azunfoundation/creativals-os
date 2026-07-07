@@ -18,14 +18,14 @@ class ParseJsonBody
 {
     public function handle(Request $request, Closure $next): Response
     {
-        \Illuminate\Support\Facades\Log::info("ParseJsonBody RUNNING for " . $request->path() . ", method: " . $request->method());
+        \Illuminate\Support\Facades\Log::error("ParseJsonBody RUNNING for " . $request->path() . ", method: " . $request->method());
         // Under Apache mod_php, $_SERVER['CONTENT_TYPE'] can be corrupted and
         // $request->isJson() may return false for application/json requests.
         // To be safe: whenever the input bag is empty but there is a request body,
         // attempt to parse it as JSON and merge the result.
         if (empty($request->all())) {
             $content = file_get_contents('php://input');
-            error_log("ParseJsonBody: php_input_len=" . strlen((string)$content));
+            \Illuminate\Support\Facades\Log::error("ParseJsonBody: php_input_len=" . strlen((string)$content));
             if (!empty($content) && $content[0] === '{') {
                 $json = json_decode($content, true);
                 if (is_array($json) && json_last_error() === JSON_ERROR_NONE) {
